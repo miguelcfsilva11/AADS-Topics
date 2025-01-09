@@ -1,0 +1,3 @@
+src/.*
+src/include
+src/zig-out

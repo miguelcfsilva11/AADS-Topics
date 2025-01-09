@@ -1,151 +1,84 @@
 const std = @import("std");
 const AVLTree = @import("./avl.zig").AVLTree;
-const SkipList = @import("./skipList.zig").SkipList;
+const Node = @import("./avl.zig").AVLTree.Node;
+
+const raylib = @cImport({
+    @cInclude("raylib.h");
+});
 
 pub fn main() !void {
-
     var allocator = std.heap.page_allocator;
-    const numValues = 10;
+    const numValues = 10000;
     var prng = std.rand.DefaultPrng.init(12345); // Initialize with a seed
-    const random = prng.random();
+    var random = prng.random();
 
-    var values: [numValues]i32 = undefined;
-
-    for (0..numValues) |i| {
-        // Generate a random i32 within [-100, 100]
-        values[i] = @rem(random.int(i32), 201) - 100;
-    }
-
-    std.debug.print("Generated Values: {any}\n", .{values});
-
-    // Visualize AVL Tree
     var avl = AVLTree.init(&allocator);
-    defer avl.deinit();
-    try visualizeAVL(&avl, &values);
 
-    // Visualize Skip List
-    var skipList = SkipList.init(allocator, 4, 0.5);
-    defer skipList.deinit();
-    try visualizeSkipList(skipList, values);
-}
+    var valuesInserted: usize = 0; // Track how many values have been inserted
+    const totalValues = numValues;
 
-fn visualizeAVL(avl: *AVLTree, values: []const i32) !void {
-    var stepPNGs: [][]const u8 = try std.heap.page_allocator.alloc([]const u8, values.len);
-    defer std.heap.page_allocator.free(stepPNGs);
+    // Initialize Raylib window
+    raylib.InitWindow(800, 600, "AVL Tree Visualization");
+    defer raylib.CloseWindow();
 
-    var i: usize = 0;
-    for (values) |value| {
-        const dotFileName = std.fmt.allocPrint(std.heap.page_allocator, "step{d}_avl_tree.dot", .{i + 1}) catch unreachable;
-        const pngFileName = std.fmt.allocPrint(std.heap.page_allocator, "step{d}_avl_tree.png", .{i + 1}) catch unreachable;
-        stepPNGs[i] = pngFileName;
-        try insertAndVisualizeAVL(avl, value, dotFileName, pngFileName);
-        i += 1;
-    }
+    raylib.SetTargetFPS(60);
 
-
-    try generateAnimation(stepPNGs, "avl_tree_animation.gif");
-}
-
-fn visualizeSkipList(skipList: SkipList, values: []const i32) !void {
-    var stepPNGs: []const []const u8 = try std.heap.page_allocator.alloc([]const u8, values.len);
-    defer std.heap.page_allocator.free(stepPNGs);
-
-    var i: usize = 0;
-    for (values) |value| {
-
-        const dotFileName = std.fmt.allocPrint(std.heap.page_allocator, "step{d}_skip_list.dot", .{i + 1}) catch unreachable;
-        const pngFileName = std.fmt.allocPrint(std.heap.page_allocator, "step{d}_skip_list.png", .{i + 1}) catch unreachable;
-        stepPNGs[i] = pngFileName;
-        try insertAndVisualizeSkipList(skipList, value, dotFileName, pngFileName);
-
-        i += 1;
-    }
-
-    try generateAnimation(stepPNGs, "skip_list_animation.gif");
-}
-
-fn insertAndVisualizeAVL(avl: *AVLTree, key: i32, dotFileName: []const u8, pngFileName: []const u8) !void {
-    avl.insert(key);
-    try generateAVLTreeDot(avl, dotFileName);
-    try runGraphviz(dotFileName, pngFileName);
-}
-
-fn insertAndVisualizeSkipList(skipList: SkipList, key: i32, dotFileName: []const u8, pngFileName: []const u8) !void {
-    try skipList.insert(key);
-    try generateSkipListDot(skipList, dotFileName);
-    try runGraphviz(dotFileName, pngFileName);
-}
-
-fn generateAVLTreeDot(avl: *AVLTree, fileName: []const u8) !void {
-    var file = try std.fs.cwd().createFile(fileName, .{});
-    defer file.close();
-
-    const writer = file.writer();
-    try writer.print("digraph AVLTree {\n", .{});
-    try writeAVLNode(avl.root, writer);
-    try writer.print("}\n", .{});
-}
-
-fn writeAVLNode(node: ?*AVLTree.Node, writer: anytype) !void {
-    if (node == null) return;
-    const n = node.?;
-
-    if (n.left) |left| {
-        try writer.print("    \"{d}\" -> \"{d};\n", .{n.key, left.key});
-        try writeAVLNode(n.left, writer);
-    }
-
-    if (n.right) |right| {
-        try writer.print("    \"{d}\" -> \"{d};\n", .{n.key, right.key});
-        try writeAVLNode(n.right, writer);
-    }
-}
-
-fn generateSkipListDot(skipList: SkipList, fileName: []const u8) !void {
-    var file = try std.fs.cwd().createFile(fileName, .{});
-    defer file.close();
-
-    const writer = file.writer();
-    try writer.print("digraph SkipList {\n", .{});
-    if (skipList.header) |header| {
-        try writeSkipListNode(header, writer);
-    }
-    try writer.print("}\n", .{});
-}
-
-fn writeSkipListNode(node: *SkipList.Node, writer: anytype) !void {
-    var current = node;
-    while (current != null) {
-        for (0..current.forward.len) |level| {
-            const next = current.forward[level];
-            if (next) {
-                try writer.print("    \"{d}\" -> \"{d}\" [label=\"Level {d}\"];\n", .{current.key, next.?.key, level});
+    while (!raylib.WindowShouldClose()) {
+        // Check if it's time to insert a new value
+        if (raylib.IsKeyPressed(raylib.KEY_ONE)) { // Check if the "1" key is pressed
+            if (valuesInserted < totalValues) {
+                const value = @rem(random.int(i32), 201) - 100; // Generate a random value
+                try avl.insert(value); // Insert the value into the AVL tree
+                valuesInserted += 1; // Increment the count of inserted values
+            } else {
+                raylib.DrawText("All values have been inserted!", 10, 60, 20, raylib.RED);
             }
         }
-        current = current.forward[0];
+
+
+        // Drawing logic
+        raylib.BeginDrawing();
+        defer raylib.EndDrawing();
+
+        raylib.ClearBackground(raylib.RAYWHITE);
+        if (avl.root) |nonNullNode| {
+            drawTree(nonNullNode, 400, 50, 200);
+        }
+        raylib.DrawText("Inserting values dynamically...", 10, 10, 20, raylib.GRAY);
+        raylib.DrawText("Press ESC to quit.", 10, 40, 20, raylib.GRAY);
     }
 }
 
-fn runGraphviz(dotFile: []const u8, outputFile: []const u8) !void {
-    var gp = std.ChildProcess.init(.{"dot", "-Tpng", dotFile, "-o", outputFile});
-    defer gp.deinit();
-    try gp.spawnAndWait();
-}
+fn drawTree(node: *Node, x: f32, y: f32, offset: f32) void {
+    if (node.left) |left| {
+        const startPos = raylib.Vector2{ .x = x, .y = y };
+        const endPos = raylib.Vector2{ .x = x - offset, .y = y + 100 };
 
-fn generateAnimation(imageFiles: []const []const u8, outputGif: []const u8) !void {
-    var args = try std.heap.page_allocator.alloc([]const u8, imageFiles.len + 3);
-    defer std.heap.page_allocator.free(args);
-
-    args[0] = "convert"; // Use ImageMagick or similar tools
-    var i: usize = 0;
-    for (imageFiles) |file| {
-        args[i + 1] = file;
-        i += 1;
+        raylib.DrawLineV(startPos, endPos, raylib.BLACK);
+        drawTree(left, x - offset, y + 100, offset / 2);
     }
-    args[imageFiles.len + 1] = outputGif;
-    args[imageFiles.len + 2] = null;
 
-    var gp = std.ChildProcess.init(args);
-    defer gp.deinit();
-    try gp.spawnAndWait();
+    if (node.right) |right| {
+        const startPos = raylib.Vector2{ .x = x, .y = y };
+        const endPos = raylib.Vector2{ .x = x + offset, .y = y + 100 };
+
+        raylib.DrawLineV(startPos, endPos, raylib.BLACK);
+        drawTree(right, x + offset, y + 100, offset / 2);
+    }
+
+    raylib.DrawCircleV(raylib.Vector2{ .x = x, .y = y }, 20, raylib.SKYBLUE);
+
+    var buffer: [32]u8 = undefined;
+    const keySlice = std.fmt.bufPrint(buffer[0..], "{}", .{node.key}) catch unreachable;
+
+    // Null-terminate the string
+    buffer[keySlice.len] = 0;
+
+    raylib.DrawText(
+        @ptrCast(&buffer[0]),             // C-style string
+        @intFromFloat(x - 10),            // x position (c_int)
+        @intFromFloat(y - 10),            // y position (c_int)
+        20,                               // Font size (c_int)
+        raylib.BLACK                      // Color
+    );
 }

@@ -21,16 +21,33 @@ pub const AVLTree = struct {
     }
 
     fn nodeHeight(node: ?*Node) usize {
-        return if (node == null) 0 else |actual_node| usize(actual_node.height);
+        if (node == null) {
+            return 0;
+        }
+
+        const actual_node = node.?;
+        return actual_node.height;
     }
 
+
     fn updateHeight(node: *Node) void {
-        node.height = std.math.max(nodeHeight(node.left), nodeHeight(node.right)) + 1;
+        node.height = @max(nodeHeight(node.left), nodeHeight(node.right)) + 1;
     }
 
     fn balanceFactor(node: ?*Node) i32 {
-        return if (node == null) 0 else nodeHeight(node.left) - nodeHeight(node.right);
+        if (node == null) {
+            return 0;
+        }
+
+        const actual_node = node.?;
+        const left_height: i32 = @intCast(nodeHeight(actual_node.left));
+        const right_height: i32 = @intCast(nodeHeight(actual_node.right)); // Cast to i32
+
+        return left_height - right_height;
     }
+
+
+
 
     fn rotateRight(y: *Node) *Node {
         var x = y.left.?;
@@ -72,32 +89,36 @@ pub const AVLTree = struct {
         }
 
         return node;
+        
     }
 
-    fn insertNode(self: *AVLTree, node: ?*Node, key: i32) ?*Node {
+    fn insertNode(self: *AVLTree, node: ?*Node, key: i32) !*Node {
         if (node == null) {
-            return self.allocator.create(Node){
+            const newNode = try self.allocator.create(Node);
+            newNode.* = Node{
                 .key = key,
                 .height = 1,
                 .left = null,
                 .right = null,
             };
+            return newNode;
         }
 
         if (key < node.?.key) {
-            node.?.left = insertNode(self, node.?.left, key);
+            node.?.left = try insertNode(self, node.?.left, key);
         } else if (key > node.?.key) {
-            node.?.right = insertNode(self, node.?.right, key);
+            node.?.right = try insertNode(self, node.?.right, key);
         } else {
             // Duplicate keys are not allowed
-            return node;
+            return node.?;
         }
 
         return balance(node.?);
     }
 
-    pub fn insert(self: *AVLTree, key: i32) void {
-        self.root = insertNode(self, self.root, key);
+
+    pub fn insert(self: *AVLTree, key: i32) !void {
+        self.root = try insertNode(self, self.root, key);
     }
 
     fn inOrderTraversal(node: ?*Node, visit: fn (i32) void) void {
