@@ -143,6 +143,58 @@ pub const AVLTree = struct {
         return null;
     }
 
+    pub fn remove(self: *AVLTree, key: i32) !void {
+        self.root = try self.removeNode(self.root, key);
+    }
+
+    fn findMin(_: *AVLTree, node: *Node) *Node {
+        var current = node;
+        while (current.left != null) {
+            current = current.left.?;
+        }
+        return current;
+    }
+
+
+    fn removeNode(self: *AVLTree, node: ?*Node, key: i32) !?*Node {
+        if (node == null) {
+            return null;
+        }
+
+        if (key < node.?.key) {
+            node.?.left = try self.removeNode(node.?.left, key);
+        } else if (key > node.?.key) {
+            node.?.right = try self.removeNode(node.?.right, key);
+        } else {
+            // Node to be deleted found
+            if (node.?.left == null and node.?.right == null) {
+                // Case: Node with no children
+                self.allocator.destroy(node.?);
+                return null;
+            } else if (node.?.left == null) {
+                // Case: Node with only right child
+                const temp = node.?.right;
+                self.allocator.destroy(node.?);
+                return temp;
+            } else if (node.?.right == null) {
+                // Case: Node with only left child
+                const temp = node.?.left;
+                self.allocator.destroy(node.?);
+                return temp;
+            } else {
+                // Case: Node with two children
+                const temp = self.findMin(node.?.right.?);
+                node.?.key = temp.key;
+                node.?.right = try self.removeNode(node.?.right, temp.key);
+            }
+        }
+
+        return balance(node.?);
+    }
+
+
+
+
     pub fn rangeSearch(self: *AVLTree, low: i32, high: i32) ![]?*Node {
         var nodes = try self.allocator.alloc(?*Node, 0);
         var queue = try self.allocator.alloc(?*Node, 0);
