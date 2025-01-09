@@ -6,6 +6,7 @@ pub const SkipList = struct {
     pub const Node = struct {
         key: i32,
         forward: []?*Node,
+        
     };
 
     maxLevel: usize,

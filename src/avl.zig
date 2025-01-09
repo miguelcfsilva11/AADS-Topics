@@ -8,6 +8,7 @@ pub const AVLTree = struct {
         height: usize,
         left: ?*Node,
         right: ?*Node,
+        highlighted: bool, // New field to track if a node is highlighted
     };
 
     root: ?*Node,
@@ -29,7 +30,6 @@ pub const AVLTree = struct {
         return actual_node.height;
     }
 
-
     fn updateHeight(node: *Node) void {
         node.height = @max(nodeHeight(node.left), nodeHeight(node.right)) + 1;
     }
@@ -45,9 +45,6 @@ pub const AVLTree = struct {
 
         return left_height - right_height;
     }
-
-
-
 
     fn rotateRight(y: *Node) *Node {
         var x = y.left.?;
@@ -89,7 +86,6 @@ pub const AVLTree = struct {
         }
 
         return node;
-        
     }
 
     fn insertNode(self: *AVLTree, node: ?*Node, key: i32) !*Node {
@@ -100,6 +96,7 @@ pub const AVLTree = struct {
                 .height = 1,
                 .left = null,
                 .right = null,
+                .highlighted = false, // Initialize as not highlighted
             };
             return newNode;
         }
@@ -116,22 +113,24 @@ pub const AVLTree = struct {
         return balance(node.?);
     }
 
-
     pub fn insert(self: *AVLTree, key: i32) !void {
         self.root = try insertNode(self, self.root, key);
     }
 
-    fn inOrderTraversal(node: ?*Node, visit: fn (i32) void) void {
-        if (node == null) return null;
-
+    fn inOrderTraversal(node: ?*Node, visit: fn (*Node) void) void {
+        if (node == null) return;
         inOrderTraversal(node.?.left, visit);
-        visit(node.?.key);
+        if (node) |actualNode| {
+            visit(actualNode);
+        }
+
         inOrderTraversal(node.?.right, visit);
     }
 
     pub fn search(self: *AVLTree, key: i32) ?*Node {
         var current = self.root;
         while (current != null) {
+            current.?.highlighted = true; // Mark node as visited
             if (key < current.?.key) {
                 current = current.?.left;
             } else if (key > current.?.key) {
@@ -154,7 +153,6 @@ pub const AVLTree = struct {
         }
         return current;
     }
-
 
     fn removeNode(self: *AVLTree, node: ?*Node, key: i32) !?*Node {
         if (node == null) {
@@ -191,9 +189,6 @@ pub const AVLTree = struct {
 
         return balance(node.?);
     }
-
-
-
 
     pub fn rangeSearch(self: *AVLTree, low: i32, high: i32) ![]?*Node {
         var nodes = try self.allocator.alloc(?*Node, 0);
@@ -234,7 +229,7 @@ pub const AVLTree = struct {
         return nodes;
     }
 
-    pub fn traverseInOrder(self: *AVLTree, visit: fn (i32) void) void {
+    pub fn traverseInOrder(self: *AVLTree, visit: fn (*Node) void) void {
         inOrderTraversal(self.root, visit);
     }
 
