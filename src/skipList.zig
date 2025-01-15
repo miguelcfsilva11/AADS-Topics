@@ -1,5 +1,6 @@
 const std = @import("std");
 
+
 pub const SkipList = struct {
     const Allocator = std.mem.Allocator;
 
@@ -35,6 +36,7 @@ pub const SkipList = struct {
 
 
     seed: u64,
+    rng: std.rand.DefaultPrng,
     maxLevel: usize,
     probability: f64,
     header: ?*Node,
@@ -43,11 +45,14 @@ pub const SkipList = struct {
 
     pub fn init(allocator: *Allocator, maxLevel: usize, probability: f64, seed: u64) SkipList {
         
+        const rng = std.rand.DefaultPrng.init(seed); 
+
         return SkipList{
             .seed = seed,
             .maxLevel = maxLevel,
             .probability = probability,
             .header = null,
+            .rng = rng,
             .level = 0,
             .allocator = allocator,
         };
@@ -55,11 +60,14 @@ pub const SkipList = struct {
 
     fn randomLevel(self: *SkipList) usize {
         var lvl: usize = 0;
-        var rng = std.rand.DefaultPrng.init(self.seed); // Initialize RNG.
-        var random = rng.random();
+        var random = self.rng.random();
+
+        std.debug.print("Random number: {}\n", .{random.float(f64)});
 
         while (random.float(f64) < self.probability and lvl < self.maxLevel) {
             lvl += 1;
+            random = self.rng.random();
+
         }
         return lvl;
     }
@@ -142,10 +150,10 @@ pub const SkipList = struct {
         }
     }
 
-    pub fn levels(self: *SkipList) []?*Node {
-        // Return the forward array of the header node or an empty array if the header is null.
-        return if (self.header != null) self.header.?.forward else &[_]?*Node{};
+    pub fn getHeader(self: *SkipList) !*Node {
+        return self.header orelse return error.NullHeader;
     }
+
 
     pub fn search(self: *SkipList, key: i32) ?*Node {
         var current = self.header;
@@ -170,33 +178,46 @@ pub const SkipList = struct {
         const update = try self.allocator.alloc(?*Node, self.maxLevel + 1);
         defer self.allocator.free(update);
 
+        // Initialize the update array
+        for (0..self.maxLevel + 1) |i| {
+            update[i] = null;
+        }
+
         var current = self.header;
 
-        var i: usize = self.level;
-        while (i > 0) : (i -= 1) {
+        // Correct traversal to update pointers
+        var i: usize = self.level - 1;
+        while (true) {
             while (current.?.forward[i] != null and current.?.forward[i].?.key < key) {
                 current = current.?.forward[i];
             }
             update[i] = current;
+
+            if (i == 0) break;
+            i -= 1;
         }
 
         current = current.?.forward[0];
 
         if (current != null and current.?.key == key) {
-            for (0..self.level + 1) |j| {
+            // Unlink node properly
+            for (0..current.?.forward.len) |j| {
                 if (update[j] != null and update[j].?.forward[j] == current) {
                     update[j].?.forward[j] = current.?.forward[j];
                 }
-
             }
 
-            while (self.level > 0 and self.header.?.forward[self.level] == null) {
+            // Reduce level if necessary
+            while (self.level > 0 and self.header.?.forward[self.level - 1] == null) {
                 self.level -= 1;
             }
 
+            // Free the node's forward array, then the node
+            self.allocator.free(current.?.forward);
             self.allocator.destroy(current.?);
         }
     }
+
 
     pub fn traverse(self: *SkipList, visit: fn(*Node) void) void {
         var current = self.header;

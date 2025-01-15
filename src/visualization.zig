@@ -19,7 +19,7 @@ pub fn main() !void {
     var valuesInserted: usize = 0;
     const totalValues = numValues;
 
-    raylib.InitWindow(800, 600, "Data Structure Visualization");
+    raylib.InitWindow(1600, 1000, "Data Structure Visualization");
     defer raylib.CloseWindow();
 
     var inputBuffer: [32]u8 = [_]u8{0} ** 32;
@@ -69,9 +69,12 @@ fn handleAVLTree(avl: *AVLTree, _: *std.mem.Allocator, _: *std.rand.DefaultPrng,
         if (inputLength.* > 0) {
             const inputValue = parseInput(inputBuffer[0..inputLength.*]) catch |err| {
                 std.debug.print("Parse error: {}\n", .{err});
+                // clear buffer
+                inputLength.* = 0;
                 return false;
             };
 
+            avl.traverseInOrder(resetTreeHighlight);
             const result = avl.search(inputValue);
             if (result == null) {
                 std.debug.print("Key not found: {}\n", .{inputValue});
@@ -87,6 +90,8 @@ fn handleAVLTree(avl: *AVLTree, _: *std.mem.Allocator, _: *std.rand.DefaultPrng,
         if (inputLength.* > 0) {
             const inputValue = parseInput(inputBuffer[0..inputLength.*]) catch |err| {
                 std.debug.print("Parse error: {}\n", .{err});
+                inputLength.* = 0;
+
                 return false;
             };
             avl.traverseInOrder(resetTreeHighlight);
@@ -111,7 +116,7 @@ fn handleAVLTree(avl: *AVLTree, _: *std.mem.Allocator, _: *std.rand.DefaultPrng,
     }
 
     if (avl.root) |nonNullNode| {
-        drawTree(nonNullNode, 400, 50, 200);
+        drawTree(nonNullNode, 800, 100, 400);
     }
 
     drawControls();
@@ -127,6 +132,7 @@ fn handleSkipList(skiplist: *SkipList, _: *std.mem.Allocator, _: *std.rand.Defau
         if (inputLength.* > 0) {
             const inputValue = parseInput(inputBuffer[0..inputLength.*]) catch |err| {
                 std.debug.print("Parse error: {}", .{err});
+                inputLength.* = 0;
                 return false;
             };
 
@@ -146,6 +152,7 @@ fn handleSkipList(skiplist: *SkipList, _: *std.mem.Allocator, _: *std.rand.Defau
 
             const inputValue = parseInput(inputBuffer[0..inputLength.*]) catch |err| {
                 std.debug.print("Parse error: {}\n", .{err});
+                inputLength.* = 0;
                 return false;
             };
 
@@ -191,20 +198,45 @@ fn drawTree(node: *AVLTree.Node, x: f32, y: f32, offset: f32) void {
 
     drawAVLNode(node, x, y);
 }
+
 fn drawSkipList(skiplist: *SkipList) void {
-    var levelY: f32 = 50;
-    for (skiplist.levels()) |level| {
-        if (level != null) {
-            var x: f32 = 50;
-            // Iterate over forward nodes
-            var iterator = level.?.forward_nodes();
-            while (iterator.next()) |node| {
-                drawSkipListNode(node, x, levelY);
-                x += 100;
-            }
+    var x: f32 = 50;
+
+    var current = skiplist.getHeader() catch {
+        // Handle the error here, maybe log or return
+        return; // or continue without drawing
+    };
+
+    
+    while (true) {
+        x += 100;
+        if (current.forward[0]) |next| {
+            drawSkipListNode(next, x, 400, current.forward.len - 1);
+            current = next;
+        } else {
+            break;
         }
-        levelY += 100;
     }
+
+}
+
+
+fn drawSkipListNode(node: *SkipList.Node, x: f32, y: f32, level: usize) void {
+    const baseSize: i32 = 20;
+    const scaleFactor: i32 = 20;
+    const intLevel: i32 = @intCast(level);
+    // Increase node height based on its level
+    const width: i32 = baseSize;
+    const height: i32 = baseSize + intLevel * scaleFactor;
+
+    const color = if (node.highlighted) raylib.ORANGE else raylib.SKYBLUE;
+
+    const intx: i32 = @intFromFloat(x);
+    const inty: i32 = @intFromFloat(y);
+
+    raylib.DrawRectangle(@divTrunc(intx - width, 2), @divTrunc(inty - height , 2), width, height, color);
+    drawNodeText(node.key,@floatFromInt(@divTrunc(intx - width, 2)), @floatFromInt(@divTrunc(inty - height , 2)));
+
 }
 
 
@@ -221,14 +253,6 @@ fn drawConnection(_: *AVLTree.Node, child: *AVLTree.Node, startX: f32, startY: f
 fn drawAVLNode(node: *AVLTree.Node, x: f32, y: f32) void {
     const color = if (node.highlighted) raylib.ORANGE else raylib.SKYBLUE;
     raylib.DrawCircleV(raylib.Vector2{ .x = x, .y = y }, 20, color);
-    drawNodeText(node.key, x, y);
-}
-
-fn drawSkipListNode(node: *SkipList.Node, x: f32, y: f32) void {
-    const color = if (node.highlighted) raylib.ORANGE else raylib.SKYBLUE;
-    const intx: i32 = @intFromFloat(x);
-    const inty: i32 = @intFromFloat(y);
-    raylib.DrawRectangle(intx - 20, inty - 20, 40, 40, color);
     drawNodeText(node.key, x, y);
 }
 
