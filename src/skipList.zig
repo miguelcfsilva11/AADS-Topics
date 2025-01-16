@@ -125,9 +125,6 @@ pub const SkipList = struct {
 
         current = current.?.forward[0];
         const lvl = self.randomLevel();
-
-        std.debug.print("Key: {?}, Level: {?}\n", .{key, lvl});
-
         if (current == null or current.?.key != key) {
 
             if (lvl > self.level) {
@@ -144,7 +141,6 @@ pub const SkipList = struct {
                     newNode.forward[k] = node.forward[k];
                     node.forward[k] = newNode;
                 }
-                std.debug.print("Forward[{?}] = {?}\n", .{k, newNode.forward[k]});
             }
         }
     }
@@ -161,11 +157,14 @@ pub const SkipList = struct {
         while (i > 0) : (i -= 1) {
             while (current.?.forward[i] != null and current.?.forward[i].?.key < key) {
                 current = current.?.forward[i];
+                current.?.highlighted = true;
             }
         }
 
 
         current = current.?.forward[0];
+        current.?.highlighted = true;
+
         if (current != null and current.?.key == key) {
             return current;
         }

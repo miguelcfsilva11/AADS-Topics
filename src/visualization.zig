@@ -60,13 +60,16 @@ pub fn main() !void {
 }
 
 fn handleAVLTree(avl: *AVLTree, _: *std.mem.Allocator, _: *std.rand.DefaultPrng, random: *std.rand.Random, inputBuffer: *[32]u8, inputLength: *usize, valuesInserted: *usize, totalValues: usize) bool {
+   
+    var inputValue : i32 = 0;
     if (raylib.IsKeyPressed(raylib.KEY_BACKSPACE)) {
         return true;
     }
 
     if (raylib.IsKeyPressed(raylib.KEY_TAB)) {
+
         if (inputLength.* > 0) {
-            const inputValue = parseInput(inputBuffer[0..inputLength.*]) catch |err| {
+            inputValue = parseInput(inputBuffer[0..inputLength.*]) catch |err| {
                 std.debug.print("Parse error: {}\n", .{err});
                 // clear buffer
                 inputLength.* = 0;
@@ -75,6 +78,7 @@ fn handleAVLTree(avl: *AVLTree, _: *std.mem.Allocator, _: *std.rand.DefaultPrng,
 
             avl.traverseInOrder(resetTreeHighlight);
             const result = avl.search(inputValue);
+
             if (result == null) {
                 std.debug.print("Key not found: {}\n", .{inputValue});
             } else {
@@ -87,7 +91,7 @@ fn handleAVLTree(avl: *AVLTree, _: *std.mem.Allocator, _: *std.rand.DefaultPrng,
 
     if (raylib.IsKeyPressed(raylib.KEY_ENTER)) {
         if (inputLength.* > 0) {
-            const inputValue = parseInput(inputBuffer[0..inputLength.*]) catch |err| {
+            inputValue = parseInput(inputBuffer[0..inputLength.*]) catch |err| {
                 std.debug.print("Parse error: {}\n", .{err});
                 inputLength.* = 0;
 
@@ -95,7 +99,6 @@ fn handleAVLTree(avl: *AVLTree, _: *std.mem.Allocator, _: *std.rand.DefaultPrng,
             };
             avl.traverseInOrder(resetTreeHighlight);
             try avl.remove(inputValue);
-
             inputLength.* = 0;
         }
     }
@@ -112,12 +115,24 @@ fn handleAVLTree(avl: *AVLTree, _: *std.mem.Allocator, _: *std.rand.DefaultPrng,
         }
     } else {
         handleInput(inputBuffer, inputLength);
+        if (inputLength.* > 0) {
+            inputValue = parseInput(inputBuffer[0..inputLength.*]) catch  {
+                    if (avl.root) |nonNullNode| {
+                        drawTree(nonNullNode, 800, 100, 400);
+                    }
+                    drawInputValue(inputValue);  // Draw the input value on screen
+                    drawControls();
+                    // clear buffer
+                    return false;
+                };
+        }
     }
 
     if (avl.root) |nonNullNode| {
         drawTree(nonNullNode, 800, 100, 400);
     }
 
+    drawInputValue(inputValue);  // Draw the input value on screen
     drawControls();
     return false;
 }
@@ -126,10 +141,12 @@ fn handleSkipList(skiplist: *SkipList, _: *std.mem.Allocator, _: *std.rand.Defau
     if (raylib.IsKeyPressed(raylib.KEY_BACKSPACE)) {
         return true;
     }
+    
+    var inputValue: i32 = 0;
 
     if (raylib.IsKeyPressed(raylib.KEY_TAB)) {
         if (inputLength.* > 0) {
-            const inputValue = parseInput(inputBuffer[0..inputLength.*]) catch |err| {
+            inputValue = parseInput(inputBuffer[0..inputLength.*]) catch |err| {
                 std.debug.print("Parse error: {}", .{err});
                 inputLength.* = 0;
                 return false;
@@ -149,7 +166,7 @@ fn handleSkipList(skiplist: *SkipList, _: *std.mem.Allocator, _: *std.rand.Defau
     if (raylib.IsKeyPressed(raylib.KEY_ENTER)) {
         if (inputLength.* > 0) {
 
-            const inputValue = parseInput(inputBuffer[0..inputLength.*]) catch |err| {
+            inputValue = parseInput(inputBuffer[0..inputLength.*]) catch |err| {
                 std.debug.print("Parse error: {}\n", .{err});
                 inputLength.* = 0;
                 return false;
@@ -177,11 +194,34 @@ fn handleSkipList(skiplist: *SkipList, _: *std.mem.Allocator, _: *std.rand.Defau
         }
     } else {
         handleInput(inputBuffer, inputLength);
+                if (inputLength.* > 0) {
+            inputValue = parseInput(inputBuffer[0..inputLength.*]) catch  {
+                    drawSkipList(skiplist);
+                    drawInputValue(inputValue);  // Draw the input value on screen
+                    drawControls();
+                    // clear buffer
+                    return false;
+                };
+        }
     }
 
     drawSkipList(skiplist);
     drawControls();
     return false;
+}
+
+fn drawInputValue(inputValue: i32) void {
+    var buffer: [32]u8 = undefined;
+    const inputSlice = std.fmt.bufPrint(buffer[0..], "Input Value: {}", .{inputValue}) catch unreachable;
+    buffer[inputSlice.len] = 0;
+
+    raylib.DrawText(
+        @ptrCast(&buffer[0]),
+        10,   // X-position
+        130,  // Y-position
+        20,   // Font size
+        raylib.DARKGRAY
+    );
 }
 
 fn drawTree(node: *AVLTree.Node, x: f32, y: f32, offset: f32) void {
@@ -206,10 +246,31 @@ fn drawSkipList(skiplist: *SkipList) void {
         return; // or continue without drawing
     };
 
+
     current = current.?.forward[0];
+
+    const allocator = std.heap.page_allocator;
+    const prevlist =  allocator.alloc(?i32, skiplist.maxLevel + 1) catch {
+        return; // or continue without drawing
+    };
+
+    const postlist =  allocator.alloc(?i32, skiplist.maxLevel + 1) catch {
+        return; // or continue without drawing
+    };
+
+    defer allocator.free(postlist);
+    defer allocator.free(prevlist);
+
+    // set list values to null
+
+    for (0..skiplist.maxLevel + 1) |i| {
+        prevlist[i] = null;
+        postlist[i] = null;
+    }
+    
     while (true) {
         x += 100;
-        // print the forward array elements
+
         var counter: usize = 0;
 
 
@@ -218,6 +279,44 @@ fn drawSkipList(skiplist: *SkipList) void {
                 counter += 1;
             }
         }
+
+        for (1..counter + 1) |k| {
+            const fcounter: f32 = @floatFromInt(k);
+            var minX: f32 = 0;
+            var maxX: f32 = 0;
+
+            if (prevlist[k - 1]) |previous|  {
+
+                if (postlist[k - 1]) |post| {
+
+                    const pprevious: f32 = @floatFromInt(post);
+                    const fprevious: f32 = @floatFromInt(previous);
+
+                    minX = if (x < fprevious) x else fprevious;
+                    maxX = if (x > pprevious ) x else pprevious;
+
+                    const startPos = raylib.Vector2{ .x = minX, .y = 425 - 25 * fcounter };
+                    const endPos = raylib.Vector2{ .x = maxX, .y = 425 - 25 * fcounter };
+
+                    raylib.DrawLineV(startPos, endPos, raylib.BLACK);
+
+                }
+                
+            }
+            else {
+                minX = x ;
+                maxX = x ;
+            }
+
+            const intMinX: i32 = @intFromFloat(minX);
+            const intMaxX: i32 = @intFromFloat(maxX);
+
+            prevlist[k - 1] =  intMinX;
+            postlist[k - 1] =  intMaxX;
+
+        }
+
+
         drawSkipListNode(current.?, x, 400, counter);
         if (current.?.forward[0].?.forward[0] == null) {
             break;
@@ -232,23 +331,34 @@ fn drawSkipList(skiplist: *SkipList) void {
 
 
 fn drawSkipListNode(node: *SkipList.Node, x: f32, y: f32, level: usize) void {
-    const baseSize: i32 = 20;
-    const scaleFactor: i32 = 20;
-    const intLevel: i32 = @intCast(level);
-    // Increase node height based on its level
-    const width: i32 = baseSize;
-    const height: i32 = baseSize + intLevel * scaleFactor;
+    const squareSize: i32 = 20;  // Size of each small square
+    const spacing: i32 = 5;      // Space between squares
 
     const color = if (node.highlighted) raylib.ORANGE else raylib.SKYBLUE;
 
     const intx: i32 = @intFromFloat(x);
     const inty: i32 = @intFromFloat(y);
 
+    // Calculate total height of stacked squares
+    const intLevel: i32 = @intCast(level);
+    const totalHeight: i32 = intLevel * (squareSize + spacing);
 
-    raylib.DrawRectangle(@divTrunc(intx - width, 2), @divTrunc(inty - height , 2), width, height, color);
-    drawNodeText(node.key,@floatFromInt(@divTrunc(intx - width, 2)), @floatFromInt(@divTrunc(inty - height , 2)));
+    // Start drawing from the top to stack down
+    var i: i32 = 0;
+    while (i < level) : (i += 1) {
+        const offsetY: i32 = inty - i * (squareSize + spacing);
+        raylib.DrawRectangle(intx - (squareSize / 2), offsetY, squareSize, squareSize, color);
+    }
+    
 
+    // Draw the node's key centered on the top square
+    drawNodeText(
+        node.key,
+        @floatFromInt(intx - @divFloor(squareSize, 4)),
+        @floatFromInt(inty - @divFloor(totalHeight, 2))
+    );
 }
+
 
 
 fn drawConnection(_: *AVLTree.Node, child: *AVLTree.Node, startX: f32, startY: f32, endX: f32, endY: f32) void {
@@ -264,14 +374,32 @@ fn drawConnection(_: *AVLTree.Node, child: *AVLTree.Node, startX: f32, startY: f
 fn drawAVLNode(node: *AVLTree.Node, x: f32, y: f32) void {
     const color = if (node.highlighted) raylib.ORANGE else raylib.SKYBLUE;
     raylib.DrawCircleV(raylib.Vector2{ .x = x, .y = y }, 20, color);
-    drawNodeText(node.key, x, y);
+    drawAVLNodeText(node.key, x, y);
 }
 
-fn drawNodeText(key: i32, x: f32, y: f32) void {
+fn drawAVLNodeText(key: i32, x: f32, y: f32) void {
     var buffer: [32]u8 = undefined;
     const keySlice = std.fmt.bufPrint(buffer[0..], "{}", .{key}) catch unreachable;
     buffer[keySlice.len] = 0;
     raylib.DrawText(@ptrCast(&buffer[0]), @intFromFloat(x - 10), @intFromFloat(y - 10), 20, raylib.BLACK);
+}
+
+fn drawNodeText(key: i32, x: f32, _: f32) void {
+    var buffer: [32]u8 = undefined;
+    const keySlice = std.fmt.bufPrint(buffer[0..], "{}", .{key}) catch unreachable;
+    buffer[keySlice.len] = 0;
+
+    const textWidth: i32 = raylib.MeasureText(@ptrCast(&buffer[0]), 20);
+    const floatTW: f32 = @floatFromInt(textWidth);
+
+    // Center the text horizontally and move it slightly below the square
+    raylib.DrawText(
+        @ptrCast(&buffer[0]),
+        @intFromFloat(x - floatTW / 2),
+        450,  // 5 pixels below the square
+        20,
+        raylib.BLACK
+    );
 }
 
 fn drawControls() void {
