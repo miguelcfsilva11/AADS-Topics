@@ -40,6 +40,7 @@ pub const SkipList = struct {
     maxLevel: usize,
     probability: f64,
     header: ?*Node,
+    tail: ?*Node,
     level: usize,
     allocator: *Allocator,
 
@@ -52,6 +53,7 @@ pub const SkipList = struct {
             .maxLevel = maxLevel,
             .probability = probability,
             .header = null,
+            .tail = null,
             .rng = rng,
             .level = 0,
             .allocator = allocator,
@@ -59,10 +61,9 @@ pub const SkipList = struct {
     }
 
     fn randomLevel(self: *SkipList) usize {
+
         var lvl: usize = 0;
         var random = self.rng.random();
-
-        std.debug.print("Random number: {}\n", .{random.float(f64)});
 
         while (random.float(f64) < self.probability and lvl < self.maxLevel) {
             lvl += 1;
@@ -95,41 +96,40 @@ pub const SkipList = struct {
         return node_ptr;
     }
 
-
+    
 
     pub fn insert(self: *SkipList, key: i32) !void {
 
         if (self.header == null) {
-            self.header = try self.createNode(key, self.maxLevel); // Initialize with a dummy header
+            self.header = try self.createNode(-2147483648, self.maxLevel); // -INF
+            self.tail   = try self.createNode(2147483647, self.maxLevel); // INF
+
+            for (0..self.maxLevel + 1) |i| {
+                self.header.?.forward[i] = self.tail;
+            }
         }
-        // Allocate space for the update array
+
         const update = try self.allocator.alloc(?*Node, self.maxLevel + 1);
         defer self.allocator.free(update);
 
-        // Ensure the header is properly initialized
-        if (self.header == null) {
-            return error.NullHeader;
-        }
-
         var current = self.header;
 
-        // Traverse the skip list to find the appropriate positions
         var i: usize = self.level;
         while (i >= 0) : (i -= 1) {
             while (current.?.forward[i] != null and current.?.forward[i].?.key < key) {
                 current = current.?.forward[i];
             }
             update[i] = current;
-            if (i == 0) break; // Prevent underflow for usize
+            if (i == 0) break;
         }
 
         current = current.?.forward[0];
+        const lvl = self.randomLevel();
 
-        // If key is not already present, insert it
+        std.debug.print("Key: {?}, Level: {?}\n", .{key, lvl});
+
         if (current == null or current.?.key != key) {
-            const lvl = self.randomLevel();
 
-            // Adjust the level of the list if needed
             if (lvl > self.level) {
                 for (self.level + 1..lvl + 1) |j| {
                     update[j] = self.header;
@@ -137,15 +137,14 @@ pub const SkipList = struct {
                 self.level = lvl;
             }
 
-            // Create a new node
             const newNode = try self.createNode(key, lvl);
 
-            // Update forward pointers
             for (0..lvl + 1) |k| {
                 if (update[k]) |node| {
                     newNode.forward[k] = node.forward[k];
                     node.forward[k] = newNode;
                 }
+                std.debug.print("Forward[{?}] = {?}\n", .{k, newNode.forward[k]});
             }
         }
     }

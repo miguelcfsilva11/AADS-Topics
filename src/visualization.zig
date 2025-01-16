@@ -15,7 +15,6 @@ pub fn main() !void {
 
     var avl = AVLTree.init(&allocator);
     var skiplist = SkipList.init(&allocator, 4, 0.5, seed);
-
     var valuesInserted: usize = 0;
     const totalValues = numValues;
 
@@ -202,20 +201,31 @@ fn drawTree(node: *AVLTree.Node, x: f32, y: f32, offset: f32) void {
 fn drawSkipList(skiplist: *SkipList) void {
     var x: f32 = 50;
 
-    var current = skiplist.getHeader() catch {
+    var current: ?* SkipList.Node = skiplist.getHeader() catch {
         // Handle the error here, maybe log or return
         return; // or continue without drawing
     };
 
-    
+    current = current.?.forward[0];
     while (true) {
         x += 100;
-        if (current.forward[0]) |next| {
-            drawSkipListNode(next, x, 400, current.forward.len - 1);
-            current = next;
-        } else {
+        // print the forward array elements
+        var counter: usize = 0;
+
+
+        for (0..current.?.forward.len) |i| {
+            if (current.?.forward[i]) |_| {
+                counter += 1;
+            }
+        }
+        drawSkipListNode(current.?, x, 400, counter);
+        if (current.?.forward[0].?.forward[0] == null) {
             break;
         }
+        else {
+            current = current.?.forward[0];
+        }
+        
     }
 
 }
@@ -233,6 +243,7 @@ fn drawSkipListNode(node: *SkipList.Node, x: f32, y: f32, level: usize) void {
 
     const intx: i32 = @intFromFloat(x);
     const inty: i32 = @intFromFloat(y);
+
 
     raylib.DrawRectangle(@divTrunc(intx - width, 2), @divTrunc(inty - height , 2), width, height, color);
     drawNodeText(node.key,@floatFromInt(@divTrunc(intx - width, 2)), @floatFromInt(@divTrunc(inty - height , 2)));
