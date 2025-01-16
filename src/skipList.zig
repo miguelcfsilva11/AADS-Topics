@@ -12,7 +12,6 @@ pub const SkipList = struct {
         pub fn forward_nodes(self: ?*Node) NodeIterator {
             return NodeIterator.init(self);
         }
-
     };
 
     pub const NodeIterator = struct {

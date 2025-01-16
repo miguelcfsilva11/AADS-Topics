@@ -195,12 +195,12 @@ fn handleSkipList(skiplist: *SkipList, _: *std.mem.Allocator, _: *std.rand.Defau
     } else {
         handleInput(inputBuffer, inputLength);
                 if (inputLength.* > 0) {
-            inputValue = parseInput(inputBuffer[0..inputLength.*]) catch  {
-                    drawSkipList(skiplist);
-                    drawInputValue(inputValue);  // Draw the input value on screen
-                    drawControls();
-                    // clear buffer
-                    return false;
+                inputValue = parseInput(inputBuffer[0..inputLength.*]) catch  {
+                        drawSkipList(skiplist);
+                        drawInputValue(inputValue);  // Draw the input value on screen
+                        drawControls();
+                        // clear buffer
+                        return false;
                 };
         }
     }
