@@ -72,22 +72,23 @@ pub const SkipList = struct {
         return lvl;
     }
 
+    pub fn traverse(self: *SkipList, visit: fn(*Node)void) void {
+        var current = self.header;
+        while (current != null) {
+            visit(current.?);
+            current = current.?.forward[0];
+        }
+    }
 
     fn createNode(self: *SkipList, key: i32, level: usize) !*Node {
-        // Allocate memory for the Node
         const node_ptr = try self.allocator.create(Node);
-
-        // Allocate memory for the forward array
         const forward = try self.allocator.alloc(?*Node, level + 1);
-
-        // Initialize the Node
         node_ptr.* = Node{
             .key = key,
             .forward = forward,
-            .highlighted = false, // Initialize all fields.
+            .highlighted = false,
         };
 
-        // Initialize the forward array to null
         for (0..level + 1) |i| {
             forward[i] = null;
         }
@@ -153,18 +154,21 @@ pub const SkipList = struct {
         var current = self.header;
         
         var i: usize = self.level;
-        while (i > 0) : (i -= 1) {
-            while (current.?.forward[i] != null and current.?.forward[i].?.key < key) {
+        while (i >= 0) : (i -= 1) {
+            while (current.?.forward[i] != null and current.?.forward[i].?.key <= key) {
                 current = current.?.forward[i];
                 current.?.highlighted = true;
             }
+
+            if (i == 0) {
+                break;
+            }
         }
 
-
-        current = current.?.forward[0];
         current.?.highlighted = true;
 
         if (current != null and current.?.key == key) {
+
             return current;
         }
         return null;
@@ -216,13 +220,6 @@ pub const SkipList = struct {
     }
 
 
-    pub fn traverse(self: *SkipList, visit: fn(*Node) void) void {
-        var current = self.header;
-        while (current != null) {
-            visit(current.?);
-            current = current.?.forward[0];
-        }
-    }
 
     pub fn deinit(self: *SkipList) void {
         var current = self.header;

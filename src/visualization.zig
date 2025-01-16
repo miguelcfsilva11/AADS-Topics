@@ -152,6 +152,7 @@ fn handleSkipList(skiplist: *SkipList, _: *std.mem.Allocator, _: *std.rand.Defau
                 return false;
             };
 
+            skiplist.traverse(resetListHighlight);
             const result = skiplist.search(inputValue);
             if (result == null) {
                 std.debug.print("Key not found: {}", .{inputValue});
@@ -172,6 +173,9 @@ fn handleSkipList(skiplist: *SkipList, _: *std.mem.Allocator, _: *std.rand.Defau
                 return false;
             };
 
+
+            skiplist.traverse(resetListHighlight);
+
             skiplist.remove(inputValue) catch |err| {
                 std.debug.print("Remove error: {}\n", .{err});
                 return false;
@@ -184,6 +188,10 @@ fn handleSkipList(skiplist: *SkipList, _: *std.mem.Allocator, _: *std.rand.Defau
     }
 
     if (raylib.IsKeyPressed(raylib.KEY_K)) {
+        
+        
+        skiplist.traverse(resetListHighlight);
+
         if (valuesInserted.* < totalValues) {
             const value = @rem(random.int(i32), 201) - 100;
             skiplist.insert(value) catch |err| {
@@ -205,7 +213,10 @@ fn handleSkipList(skiplist: *SkipList, _: *std.mem.Allocator, _: *std.rand.Defau
         }
     }
 
+    
+
     drawSkipList(skiplist);
+    drawInputValue(inputValue);  // Draw the input value on screen
     drawControls();
     return false;
 }
