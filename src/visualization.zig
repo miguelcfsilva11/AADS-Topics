@@ -328,11 +328,11 @@ fn drawSkipList(skiplist: *SkipList) void {
         }
 
 
-        drawSkipListNode(current.?, x, 400, counter);
-        if (current.?.forward[0].?.forward[0] == null) {
+        if (current.?.forward[0] == null) {
             break;
         }
         else {
+            drawSkipListNode(current.?, x, 400, counter);
             current = current.?.forward[0];
         }
         
