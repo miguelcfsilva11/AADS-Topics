@@ -129,13 +129,18 @@ pub const AVLTree = struct {
 
     pub fn search(self: *AVLTree, key: i32) ?*Node {
         var current = self.root;
+
+        //std.debug.print("Looking for key: {d}\n", .{key});
         while (current != null) {
+
+            //std.debug.print("Visiting node with key: {d}\n", .{current.?.key});
             current.?.highlighted = true; // Mark node as visited
             if (key < current.?.key) {
                 current = current.?.left;
             } else if (key > current.?.key) {
                 current = current.?.right;
             } else {
+                //std.debug.print("Found key: {d}\n", .{current.?.key});
                 return current;
             }
         }
@@ -191,24 +196,21 @@ pub const AVLTree = struct {
     }
 
     pub fn rangeSearch(self: *AVLTree, low: i32, high: i32) ![]?*Node {
-        var nodes = try self.allocator.alloc(?*Node, 0);
-        var queue = try self.allocator.alloc(?*Node, 0);
 
-        defer self.allocator.free(queue);
+        const allocator = std.heap.page_allocator;
+
+        var nodes = std.ArrayList(?*Node).init(allocator);
+        
+        defer nodes.deinit();
+        var queue = std.ArrayList(?*Node).init(allocator);
+        defer queue.deinit();
 
         if (self.root != null) {
             try queue.append(self.root.?);
         }
 
-        while (queue.len > 0) {
-            const current = queue[0];
-
-            // Shift the queue to the left
-            for (queue[1..], 0..) |item, i| {
-                queue[i] = item;
-            }
-            queue.len -= 1;
-
+        while (queue.items.len > 0) {
+            const current = queue.orderedRemove(0);
             if (current != null) {
                 const node = current.?;
 
@@ -225,8 +227,7 @@ pub const AVLTree = struct {
                 }
             }
         }
-
-        return nodes;
+        return try nodes.toOwnedSlice();
     }
 
     pub fn traverseInOrder(self: *AVLTree, visit: fn (*Node) void) void {

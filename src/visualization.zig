@@ -14,7 +14,7 @@ pub fn main() !void {
     var random = prng.random();
 
     var avl = AVLTree.init(&allocator);
-    var skiplist = SkipList.init(&allocator, 4, 0.5, seed);
+    var skiplist = SkipList.init(&allocator, 0.5, seed);
     var valuesInserted: usize = 0;
     const totalValues = numValues;
 
@@ -252,13 +252,12 @@ fn drawTree(node: *AVLTree.Node, x: f32, y: f32, offset: f32) void {
 fn drawSkipList(skiplist: *SkipList) void {
     var x: f32 = 50;
 
-    var current: ?* SkipList.Node = skiplist.getHeader() catch {
-        // Handle the error here, maybe log or return
-        return; // or continue without drawing
-    };
+    var current: *SkipList.Node = skiplist.header;
 
 
-    current = current.?.forward[0];
+    if (current.forward[0]) |forward|  {
+        current = forward;
+    }
 
     const allocator = std.heap.page_allocator;
     const prevlist =  allocator.alloc(?i32, skiplist.maxLevel + 1) catch {
@@ -283,10 +282,8 @@ fn drawSkipList(skiplist: *SkipList) void {
         x += 100;
 
         var counter: usize = 0;
-
-
-        for (0..current.?.forward.len) |i| {
-            if (current.?.forward[i]) |_| {
+        for (0..current.forward.len) |i| {
+            if (current.forward[i]) |_| {
                 counter += 1;
             }
         }
@@ -328,12 +325,14 @@ fn drawSkipList(skiplist: *SkipList) void {
         }
 
 
-        if (current.?.forward[0] == null) {
+        if (current.forward[0] == null) {
             break;
         }
         else {
-            drawSkipListNode(current.?, x, 400, counter);
-            current = current.?.forward[0];
+            drawSkipListNode(current, x, 400, counter);
+            if (current.forward[0]) |forward|  {
+                current = forward;
+            }
         }
         
     }

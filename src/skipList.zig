@@ -2,7 +2,7 @@ const std = @import("std");
 
 pub const SkipList = struct {
     const Allocator = std.mem.Allocator;
-    const maxLevel = 4; // Define the max level as a compile-time constant
+    const maxLevel = 8;
 
     pub const Node = struct {
         key: i32,
@@ -10,8 +10,8 @@ pub const SkipList = struct {
         highlighted: bool,
     };
 
-    header: ?*Node,
-    tail: ?*Node,
+    header: *Node,
+    tail: *Node,
     seed: u64,
     rng: std.rand.DefaultPrng,
     maxLevel: usize,
@@ -64,22 +64,23 @@ pub const SkipList = struct {
 
     pub fn traverse(self: *SkipList, visit: fn(*Node) void) void {
         var current = self.header;
-        while (current != null) {
-            visit(current.?);
-            current = current.?.forward[0];
+        while (current.forward[0]) |c| {
+            visit(c);
+            current = c;
         }
     }
 
-    fn createNode(self: *SkipList, key: i32, level: usize) !*Node {
+    fn createNode(self: *SkipList, key: i32, _: usize) !*Node {
         const node_ptr = try self.allocator.create(Node);
-        const forward = try self.allocator.alloc(?*Node, level + 1);
+        const forward = try self.allocator.alloc(?*Node, maxLevel + 1);
         node_ptr.* = Node{
             .key = key,
             .forward = forward,
             .highlighted = false,
         };
 
-        for (0..level + 1) |i| {
+
+        inline for (0..maxLevel + 1) |i| {
             forward[i] = null;
         }
 
@@ -92,18 +93,27 @@ pub const SkipList = struct {
 
         var current = self.header;
 
-        var i: usize = self.level;
-        while (i >= 0) : (i -= 1) {
-            while (current.?.forward[i] != null and current.?.forward[i].?.key < key) {
-                current = current.?.forward[i];
+        for (0..maxLevel + 1) |i| {
+            
+            while (current.forward[maxLevel - i] != null) {
+
+                if (current.forward[maxLevel - i]) |node| {
+                    if (node.key >= key) {
+                        break;
+                    }
+                    current = node;
+
+                }
+
             }
-            update[i] = current;
-            if (i == 0) break;
+            update[maxLevel - i] = current;
         }
 
-        current = current.?.forward[0];
         const lvl = self.randomLevel();
-        if (current == null or current.?.key != key) {
+        const newNode = try self.createNode(key, lvl);
+
+        if (current.key != key) {
+
             if (lvl > self.level) {
                 for (self.level + 1..lvl + 1) |j| {
                     update[j] = self.header;
@@ -111,34 +121,39 @@ pub const SkipList = struct {
                 self.level = lvl;
             }
 
-            const newNode = try self.createNode(key, lvl);
-
-            for (0..lvl + 1) |k| {
+          for (0..lvl + 1) |k| {
                 if (update[k]) |node| {
                     newNode.forward[k] = node.forward[k];
                     node.forward[k] = newNode;
                 }
             }
+
+
         }
     }
 
     pub fn search(self: *SkipList, key: i32) ?*Node {
         var current = self.header;
 
-        var i: usize = self.level;
-        while (true) {
-            while (current != null and current.?.forward[i] != null and current.?.forward[i].?.key <= key) {
-                current = current.?.forward[i];
-            }
 
-            if (i == 0) {
-                break;
+        inline for (0..maxLevel + 1) |i| {
+            
+            if (self.level >= maxLevel - i) {
+
+                while (current.forward[maxLevel - i]) |forward| {
+
+                    if (forward.key > key) {
+                        break;
+                    }
+                    current.highlighted = true;
+                    current = forward;
+
+                }
             }
-            i -= 1;
         }
 
-        if (current != null and current.?.key == key) {
-            current.?.highlighted = true;
+        if (current.key == key) {
+            current.highlighted = true;
             return current;
         }
         return null;
@@ -146,64 +161,93 @@ pub const SkipList = struct {
 
     pub fn rangeSearch(self: *SkipList, start: i32, end: i32) ![]*Node {
         var current = self.header;
-        var i: usize = self.level;
+        const allocator =  std.heap.page_allocator;
+        var result = std.ArrayList(*Node).init(allocator);
 
-        while (true) {
-            while (current != null and current.?.forward[i] != null and current.?.forward[i].?.key <= start) {
-                current = current.?.forward[i];
+        errdefer result.deinit(); // Ensure cleanup on error
+
+        // Traverse the SkipList level by level
+        inline for (0..maxLevel + 1) |i| {
+                    
+            if (self.level >= maxLevel - i) {
+
+                while (current.forward[maxLevel - i]) |forward| {
+
+                    if (forward.key > start) {
+                        break;
+                    }
+                    current.highlighted = true;
+                    current = forward;
+
+                }
             }
+        }
 
-            if (i == 0) {
+        // traverse level 0 skiplist and keep adding until biggfer than end
+
+        while (current.forward[0]) |forward| {
+            if (forward.key > end) {
                 break;
             }
-            i -= 1;
+            try result.append(forward);
+            current = forward;
         }
 
-        var result = std.ArrayList(*Node).init(self.allocator);
-        defer result.deinit();
-
-        while (current != null and current.?.key <= end) {
-            try result.append(current.?);
-            current = current.?.forward[0];
-        }
-
-        return result.toOwnedSlice();
+        return try result.toOwnedSlice(); // Return the slice of nodes
     }
 
     pub fn remove(self: *SkipList, key: i32) !void {
-        var update = try self.allocator.alloc(?*Node, self.maxLevel + 1);
+
+        var update = try self.allocator.alloc(?*Node, maxLevel + 1);
+        
         defer self.allocator.free(update);
 
         var current = self.header;
 
-        var i: usize = self.level;
-        while (true) {
-            while (current != null and current.?.forward[i] != null and current.?.forward[i].?.key < key) {
-                current = current.?.forward[i];
-            }
+        inline for (0..maxLevel + 1) |i| {
+            
 
-            update[i] = current;
-            if (i == 0) {
-                break;
+            while (current.forward[maxLevel - i]) |forward| {
+
+                update[maxLevel - i] = current;
+
+                if (forward.key >= key) {
+                    break;
+                }
+                else {
+                    current = forward;
+                }
+                
             }
-            i -= 1;
         }
 
-        current = current.?.forward[0];
+        
 
-        if (current != null and current.?.key == key) {
-            for (0..current.?.forward.len) |j| {
-                if (update[j] != null and update[j].?.forward[j] == current) {
-                    update[j].?.forward[j] = current.?.forward[j];
+
+        if (current.forward[0]) |next| {
+
+            if (next.key == key) {
+                inline for (0..maxLevel + 1) |j| {
+
+                    if (self.level >= j) {
+                        if (update[j]) |node| {
+                            if (next.forward[j]) |forward| {
+                                //std.debug.print("Setting forward of node with key: {d} to {d}\n", .{node.key, forward.key});
+                                node.forward[j] = forward;
+                                
+                            }
+                        }
+                    }
                 }
             }
-
-            while (self.level > 0 and self.header.?.forward[self.level] == null) {
+        
+            while (self.level > 0 and self.header.forward[self.level] == null) {
                 self.level -= 1;
             }
 
-            self.allocator.free(current.?.forward);
-            self.allocator.destroy(current.?);
+            self.allocator.free(next.forward);
+            self.allocator.destroy(next);
+
         }
     }
 
