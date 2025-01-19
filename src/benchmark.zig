@@ -91,11 +91,12 @@ pub fn main() !void {
     const other_values = try readValuesFromFile(allocator, other_values_file_path);
     defer allocator.free(other_values);
 
-    // Ensure both arrays have the same length
     if (values.len != other_values.len) {
         std.debug.print("Error: The two files must contain the same number of values.\n", .{});
         return;
     }
+
+    const skiplevel: usize = 17;
 
     var avl_allocator = std.heap.page_allocator;
     var skip_allocator = std.heap.page_allocator;
@@ -103,15 +104,17 @@ pub fn main() !void {
     const seed: u64 = @intCast(0);
 
     var avl = AVLTree.init(&avl_allocator);
-    var skiplist = SkipList.init(&skip_allocator, 0.5, seed);
+    var skiplist = SkipList(skiplevel).init(&skip_allocator, 0.5, seed);
+
+
+    benchmarkOperation(&skiplist, false, other_values, values, insertOp, "Skip List Insertions");
+    benchmarkOperation(&skiplist, false, other_values, values, searchOp, "Skip List Searches");
+    benchmarkOperation(&skiplist, false, other_values, values, deleteOp, "Skip List Deletions");
+    benchmarkOperation(&skiplist, false, other_values, values, rangeSearchOp, "Skip List Range Searches");
 
     benchmarkOperation(&avl, true, other_values, values, insertOp, "AVL Insertions");
     benchmarkOperation(&avl, true, other_values, values, searchOp, "AVL Searches");
     benchmarkOperation(&avl, true, other_values, values, deleteOp, "AVL Deletions");
     benchmarkOperation(&avl, true, other_values, values, rangeSearchOp, "AVL Range Searches");
 
-    benchmarkOperation(&skiplist, false, other_values, values, insertOp, "Skip List Insertions");
-    benchmarkOperation(&skiplist, false, other_values, values, searchOp, "Skip List Searches");
-    benchmarkOperation(&skiplist, false, other_values, values, deleteOp, "Skip List Deletions");
-    benchmarkOperation(&skiplist, false, other_values, values, rangeSearchOp, "Skip List Range Searches");
 }

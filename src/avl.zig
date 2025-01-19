@@ -195,40 +195,37 @@ pub const AVLTree = struct {
         return balance(node.?);
     }
 
+    pub fn searchHelper(node: ?*Node, low: i32, high: i32, nodes: *std.ArrayList(?*Node)) !void {
+        if (node == null) return;
+
+        const current = node.?;
+
+        // Traverse left subtree only if current key > low
+        if (current.key > low) {
+            try searchHelper(current.left, low, high, nodes);
+        }
+
+        // Add current node if it's within the range
+        if (low <= current.key and current.key <= high) {
+            try nodes.append(node);
+        }
+
+        // Traverse right subtree only if current key < high
+        if (current.key < high) {
+            try searchHelper(current.right, low, high, nodes);
+        }
+    }
+
     pub fn rangeSearch(self: *AVLTree, low: i32, high: i32) ![]?*Node {
-
         const allocator = std.heap.page_allocator;
-
         var nodes = std.ArrayList(?*Node).init(allocator);
-        
         defer nodes.deinit();
-        var queue = std.ArrayList(?*Node).init(allocator);
-        defer queue.deinit();
 
-        if (self.root != null) {
-            try queue.append(self.root.?);
-        }
+        try searchHelper(self.root, low, high, &nodes);
 
-        while (queue.items.len > 0) {
-            const current = queue.orderedRemove(0);
-            if (current != null) {
-                const node = current.?;
-
-                if (low <= node.key and node.key <= high) {
-                    try nodes.append(current);
-                }
-
-                if (node.key > low and node.left != null) {
-                    try queue.append(node.left.?);
-                }
-
-                if (node.key < high and node.right != null) {
-                    try queue.append(node.right.?);
-                }
-            }
-        }
         return try nodes.toOwnedSlice();
     }
+
 
     pub fn traverseInOrder(self: *AVLTree, visit: fn (*Node) void) void {
         inOrderTraversal(self.root, visit);

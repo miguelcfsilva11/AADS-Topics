@@ -1,262 +1,255 @@
 const std = @import("std");
 
-pub const SkipList = struct {
-    const Allocator = std.mem.Allocator;
-    const maxLevel = 8;
+pub fn SkipList(comptime maxLevel: usize) type {
+    return struct {
+        const Self = @This();
+        const Allocator = std.mem.Allocator;
 
-    pub const Node = struct {
-        key: i32,
-        forward: []?*Node,
-        highlighted: bool,
-    };
-
-    header: *Node,
-    tail: *Node,
-    seed: u64,
-    rng: std.rand.DefaultPrng,
-    maxLevel: usize,
-    probability: f64,
-    level: usize,
-    allocator: *Allocator,
-
-    pub fn init(allocator: *Allocator, probability: f64, seed: u64) SkipList {
-        const rng = std.rand.DefaultPrng.init(seed);
-
-        var header = allocator.create(Node) catch unreachable;
-        var tail = allocator.create(Node) catch unreachable;
-
-        header.* = Node{
-            .key = -2147483648,
-            .forward = allocator.alloc(?*Node, maxLevel + 1) catch unreachable,
-            .highlighted = false,
+        pub const Node = struct {
+            key: i32,
+            forward: []?*Node,
+            highlighted: bool,
         };
 
-        tail.* = Node{
-            .key = 2147483647,
-            .forward = allocator.alloc(?*Node, maxLevel + 1) catch unreachable,
-            .highlighted = false,
-        };
-
-        inline for (0..maxLevel + 1) |i| {
-            header.forward[i] = tail;
-            tail.forward[i] = null;
-        }
-
-        return SkipList{
-            .seed = seed,
-            .maxLevel = comptime maxLevel,
-            .probability = probability,
-            .header = header,
-            .tail = tail,
-            .rng = rng,
-            .level = 0,
-            .allocator = allocator,
-        };
-    }
-
-    fn randomLevel(self: *SkipList) usize {
-        var lvl: usize = 0;
-        while (self.rng.random().float(f64) < self.probability and lvl < self.maxLevel) {
-            lvl += 1;
-        }
-        return lvl;
-    }
-
-    pub fn traverse(self: *SkipList, visit: fn(*Node) void) void {
-        var current = self.header;
-        while (current.forward[0]) |c| {
-            visit(c);
-            current = c;
-        }
-    }
-
-    fn createNode(self: *SkipList, key: i32, _: usize) !*Node {
-        const node_ptr = try self.allocator.create(Node);
-        const forward = try self.allocator.alloc(?*Node, maxLevel + 1);
-        node_ptr.* = Node{
-            .key = key,
-            .forward = forward,
-            .highlighted = false,
-        };
+        header: *Node,
+        tail: *Node,
+        seed: u64,
+        rng: std.rand.DefaultPrng,
+        probability: f64,
+        level: usize,
+        allocator: *Allocator,
+        update: []?*Node,  
+        maxLevel: usize = maxLevel,    
 
 
-        inline for (0..maxLevel + 1) |i| {
-            forward[i] = null;
-        }
 
-        return node_ptr;
-    }
+        pub fn init(allocator: *Allocator, probability: f64, seed: u64) Self {
+            const rng = std.rand.DefaultPrng.init(seed);
 
-    pub fn insert(self: *SkipList, key: i32) !void {
-        var update = try self.allocator.alloc(?*Node, self.maxLevel + 1);
-        defer self.allocator.free(update);
+            var header = allocator.create(Node) catch unreachable;
+            var tail = allocator.create(Node) catch unreachable;
+            const update = allocator.alloc(?*Node, maxLevel + 1) catch unreachable;
 
-        var current = self.header;
+            header.* = Node{
+                .key = -2147483648,
+                .forward = allocator.alloc(?*Node, maxLevel + 1) catch unreachable,
+                .highlighted = false,
+            };
 
-        for (0..maxLevel + 1) |i| {
-            
-            while (current.forward[maxLevel - i] != null) {
+            tail.* = Node{
+                .key = 2147483647,
+                .forward = allocator.alloc(?*Node, maxLevel + 1) catch unreachable,
+                .highlighted = false,
+            };
 
-                if (current.forward[maxLevel - i]) |node| {
-                    if (node.key >= key) {
-                        break;
-                    }
-                    current = node;
-
-                }
-
+            inline for (0..maxLevel + 1) |i| {
+                header.forward[i] = tail;
+                tail.forward[i] = null;
             }
-            update[maxLevel - i] = current;
+
+            return Self{
+                .seed = seed,
+                .probability = probability,
+                .header = header,
+                .tail = tail,
+                .rng = rng,
+                .level = 0,
+                .allocator = allocator,
+                .update = update,
+            };
         }
 
-        const lvl = self.randomLevel();
-        const newNode = try self.createNode(key, lvl);
+        fn randomLevel(self: *Self) usize {
+            var lvl: usize = 0;
+            while (self.rng.random().float(f64) < self.probability and lvl < maxLevel) {
+                lvl += 1;
+            }
+            return lvl;
+        }
 
-        if (current.key != key) {
+        pub fn traverse(self: *Self, visit: fn(*Node) void) void {
+            var current = self.header;
+            while (current.forward[0]) |c| {
+                visit(c);
+                current = c;
+            }
+        }
+
+        fn createNode(self: *Self, key: i32, _: usize) !*Node {
+            const node_ptr = try self.allocator.create(Node);
+            const forward = try self.allocator.alloc(?*Node, maxLevel + 1);
+            node_ptr.* = Node{
+                .key = key,
+                .forward = forward,
+                .highlighted = false,
+            };
+
+            inline for (0..maxLevel + 1) |i| {
+                forward[i] = null;
+            }
+
+            return node_ptr;
+        }
+
+        pub fn insert(self: *Self, key: i32) !void {
+            var current = self.header;
+
+            for (0..maxLevel + 1) |i| {
+                self.update[i] = null;
+            }
+            
+            inline for (0..maxLevel + 1) |i| {
+                while (current.forward[maxLevel - i] != null) {
+                    if (current.forward[maxLevel - i]) |node| {
+                        if (node.key > key) {
+                            break;
+                        }
+                        current = node;
+                    }
+                }
+                self.update[maxLevel - i] = current;
+            }
+
+            const lvl = self.randomLevel();
+            const newNode = try self.createNode(key, lvl);
+
+            std.debug.print("New node with key: {d} and level: {d}\n", .{key, lvl});
+            std.debug.print("Current key: {d}\n", .{current.key});
+            if (current.key == key)
+                return; 
 
             if (lvl > self.level) {
                 for (self.level + 1..lvl + 1) |j| {
-                    update[j] = self.header;
-                }
+                        self.update[j] = self.header;
+                    }
+                
                 self.level = lvl;
-            }
-
-          for (0..lvl + 1) |k| {
-                if (update[k]) |node| {
-                    newNode.forward[k] = node.forward[k];
-                    node.forward[k] = newNode;
-                }
-            }
-
-
-        }
-    }
-
-    pub fn search(self: *SkipList, key: i32) ?*Node {
-        var current = self.header;
-
-
-        inline for (0..maxLevel + 1) |i| {
             
-            if (self.level >= maxLevel - i) {
+            }
 
-                while (current.forward[maxLevel - i]) |forward| {
-
-                    if (forward.key > key) {
-                        break;
-                    }
-                    current.highlighted = true;
-                    current = forward;
-
+            for (0.. lvl + 1) |j| {
+                if (self.update[j]) |node| {
+                    newNode.forward[j] = node.forward[j];
+                    node.forward[j] = newNode;
                 }
             }
         }
 
-        if (current.key == key) {
-            current.highlighted = true;
-            return current;
-        }
-        return null;
-    }
+        pub fn search(self: *Self, key: i32) ?*Node {
+            var current = self.header;
 
-    pub fn rangeSearch(self: *SkipList, start: i32, end: i32) ![]*Node {
-        var current = self.header;
-        const allocator =  std.heap.page_allocator;
-        var result = std.ArrayList(*Node).init(allocator);
+            inline for (0..maxLevel + 1) |i| {
+                if (self.level >= maxLevel - i) {
 
-        errdefer result.deinit(); // Ensure cleanup on error
-
-        // Traverse the SkipList level by level
-        inline for (0..maxLevel + 1) |i| {
-                    
-            if (self.level >= maxLevel - i) {
-
-                while (current.forward[maxLevel - i]) |forward| {
-
-                    if (forward.key > start) {
-                        break;
+                    while (current.forward[maxLevel - i]) |forward| {
+                        if (forward.key > key) {
+                            break;
+                        }
+                        current.highlighted = true;
+                        current = forward;
                     }
-                    current.highlighted = true;
-                    current = forward;
-
                 }
             }
-        }
 
-        // traverse level 0 skiplist and keep adding until biggfer than end
-
-        while (current.forward[0]) |forward| {
-            if (forward.key > end) {
-                break;
+            if (current.key == key) {
+                current.highlighted = true;
+                return current;
             }
-            try result.append(forward);
-            current = forward;
+            return null;
         }
 
-        return try result.toOwnedSlice(); // Return the slice of nodes
-    }
+        pub fn rangeSearch(self: *Self, start: i32, end: i32) ![]*Node {
+            var current = self.header;
+            const allocator = std.heap.page_allocator;
+            var result = std.ArrayList(*Node).init(allocator);
 
-    pub fn remove(self: *SkipList, key: i32) !void {
+            errdefer result.deinit(); // Ensure cleanup on error
 
-        var update = try self.allocator.alloc(?*Node, maxLevel + 1);
-        
-        defer self.allocator.free(update);
+            inline for (0..maxLevel + 1) |i| {
+                if (self.level >= maxLevel - i) {
+                    while (current.forward[maxLevel - i]) |forward| {
+                        if (forward.key > start) {
+                            break;
+                        }
+                        current.highlighted = true;
+                        current = forward;
+                    }
+                }
+            }
 
-        var current = self.header;
-
-        inline for (0..maxLevel + 1) |i| {
-            
-
-            while (current.forward[maxLevel - i]) |forward| {
-
-                update[maxLevel - i] = current;
-
-                if (forward.key >= key) {
+            while (current.forward[0]) |forward| {
+                if (forward.key > end) {
                     break;
                 }
-                else {
-                    current = forward;
-                }
-                
+                try result.append(forward);
+                current = forward;
             }
+
+            return try result.toOwnedSlice(); // Return the slice of nodes
         }
 
-        
+        pub fn remove(self: *Self, key: i32) !void {
 
 
-        if (current.forward[0]) |next| {
+            var current = self.header;
 
-            if (next.key == key) {
-                inline for (0..maxLevel + 1) |j| {
+            // reset update array
+            for (0..maxLevel + 1) |i| {
+                self.update[i] = null;
+            }
 
-                    if (self.level >= j) {
-                        if (update[j]) |node| {
-                            if (next.forward[j]) |forward| {
-                                //std.debug.print("Setting forward of node with key: {d} to {d}\n", .{node.key, forward.key});
-                                node.forward[j] = forward;
-                                
+            inline for (0..maxLevel + 1) |i| {
+                while (current.forward[maxLevel - i]) |forward| {
+
+                    self.update[maxLevel - i] = current;
+                    if (forward.key >= key) {
+                        break;
+                    } else {
+                        current = forward;
+                    }
+                }
+            }
+
+            if (current.forward[0]) |next| {
+                if (next.key == key) {
+                    inline for (0..maxLevel + 1) |j| {
+                        if (self.level >= j) {
+                            if (self.update[j]) |node| {
+                                if (next.forward[j]) |forward| {
+                                    node.forward[j] = forward;
+                                }
                             }
                         }
                     }
+
+                    while (self.level > 0 and self.header.forward[self.level] == null) {
+                        self.level -= 1;
+                    }
+
+                    self.allocator.free(next.forward);
+
+                    self.allocator.destroy(next);
                 }
-            }
-        
-            while (self.level > 0 and self.header.forward[self.level] == null) {
-                self.level -= 1;
+
+                else {
+                    return;
+                }
+
+
             }
 
-            self.allocator.free(next.forward);
-            self.allocator.destroy(next);
+            // TODO how to free memory dedicated to the  removed node
 
         }
-    }
 
-    pub fn deinit(self: *SkipList) void {
-        var current = self.header;
-        while (current != null) {
-            const next = current.?.forward[0];
-            self.allocator.destroy(current.?);
-            current = next;
+        pub fn deinit(self: *Self) void {
+            var current = self.header;
+            while (current != null) {
+                const next = current.?.forward[0];
+                self.allocator.destroy(current.?);
+                current = next;
+            }
+            self.allocator.free(self.update);
         }
-    }
-};
+    };
+}

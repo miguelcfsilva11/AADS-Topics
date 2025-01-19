@@ -1,7 +1,8 @@
 const std = @import("std");
 const AVLTree = @import("./avl.zig").AVLTree;
+const SkipList = @import("./skiplist.zig").SkipList(4);
 
-const SkipList = @import("./skiplist.zig").SkipList;
+
 const raylib = @cImport({
     @cInclude("raylib.h");
 });
@@ -14,7 +15,9 @@ pub fn main() !void {
     var random = prng.random();
 
     var avl = AVLTree.init(&allocator);
-    var skiplist = SkipList.init(&allocator, 0.5, seed);
+
+
+    var skiplist: SkipList = SkipList.init(&allocator, 0.5, seed);
     var valuesInserted: usize = 0;
     const totalValues = numValues;
 
@@ -105,8 +108,8 @@ fn handleAVLTree(avl: *AVLTree, _: *std.mem.Allocator, _: *std.rand.DefaultPrng,
 
     if (raylib.IsKeyPressed(raylib.KEY_K)) {
         if (valuesInserted.* < totalValues) {
-            const value = @rem(random.int(i32), 201) - 100;
             
+            const value = @rem(random.int(i32), 201) - 100;
             avl.insert(value) catch |err| {
                 std.debug.print("Insert error: {}\n", .{err});
                 return false;
@@ -194,6 +197,8 @@ fn handleSkipList(skiplist: *SkipList, _: *std.mem.Allocator, _: *std.rand.Defau
 
         if (valuesInserted.* < totalValues) {
             const value = @rem(random.int(i32), 201) - 100;
+            std.debug.print("Inserting value: {}\n", .{value});
+
             skiplist.insert(value) catch |err| {
                 std.debug.print("Insert error: {}\n", .{err});
                 return false;
