@@ -1,3 +1,5 @@
 src/.*
 src/include
 src/zig-out
+src/*.o
+src/*.exe
