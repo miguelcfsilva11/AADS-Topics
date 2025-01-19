@@ -1,4 +1,5 @@
 const std = @import("std");
+const print_steps: bool = @import("config.zig").print_steps;
 
 pub const AVLTree = struct {
     const Allocator = std.mem.Allocator;
@@ -89,7 +90,10 @@ pub const AVLTree = struct {
     }
 
     fn insertNode(self: *AVLTree, node: ?*Node, key: i32) !*Node {
+        
         if (node == null) {
+            if (print_steps)
+                std.debug.print("Inserting key: {d}\n", .{key});
             const newNode = try self.allocator.create(Node);
             newNode.* = Node{
                 .key = key,
@@ -100,13 +104,16 @@ pub const AVLTree = struct {
             };
             return newNode;
         }
-
+        
+        if (print_steps)
+            std.debug.print("Visiting node with key: {d}\n", .{node.?.key});
         if (key < node.?.key) {
             node.?.left = try insertNode(self, node.?.left, key);
         } else if (key > node.?.key) {
             node.?.right = try insertNode(self, node.?.right, key);
         } else {
-            // Duplicate keys are not allowed
+            if (print_steps)
+                std.debug.print("Key {d} already exists in the tree\n", .{key});
             return node.?;
         }
 
@@ -117,30 +124,51 @@ pub const AVLTree = struct {
         self.root = try insertNode(self, self.root, key);
     }
 
-    fn inOrderTraversal(node: ?*Node, visit: fn (*Node) void) void {
-        if (node == null) return;
-        inOrderTraversal(node.?.left, visit);
-        if (node) |actualNode| {
-            visit(actualNode);
-        }
+        
+    fn inOrderTraversal(root: ?*Node, visit: fn (anytype) void) void {
+        var stack: [256]?*Node = [_]?*Node{null} ** 256;
+        var stackTop: usize = 0;
+        var current: ?*Node = root;
 
-        inOrderTraversal(node.?.right, visit);
+        while (current != null or stackTop > 0) {
+            while (current != null) {
+                if (stackTop >= stack.len) {
+                    std.debug.panic("Stack overflow during traversal", .{});
+                }
+                stack[stackTop] = current;
+                stackTop += 1;
+                current = current.?.left;
+            }
+
+            stackTop -= 1;
+            current = stack[stackTop];
+
+            if (current) |actualNode| {
+                visit(actualNode);
+            }
+
+            current = current.?.right;
+        }
     }
+
 
     pub fn search(self: *AVLTree, key: i32) ?*Node {
         var current = self.root;
 
-        //std.debug.print("Looking for key: {d}\n", .{key});
+        if (print_steps)
+            std.debug.print("Looking for key: {d}\n", .{key});
         while (current != null) {
+            if (print_steps)
+                std.debug.print("Visiting node with key: {d}\n", .{current.?.key});
 
-            //std.debug.print("Visiting node with key: {d}\n", .{current.?.key});
             current.?.highlighted = true; // Mark node as visited
             if (key < current.?.key) {
                 current = current.?.left;
             } else if (key > current.?.key) {
                 current = current.?.right;
             } else {
-                //std.debug.print("Found key: {d}\n", .{current.?.key});
+                if (print_steps)
+                    std.debug.print("Found key: {d}\n", .{current.?.key});
                 return current;
             }
         }
@@ -164,12 +192,19 @@ pub const AVLTree = struct {
             return null;
         }
 
+        if (print_steps)
+            std.debug.print("Visiting node with key: {d}\n", .{node.?.key});
+
         if (key < node.?.key) {
             node.?.left = try self.removeNode(node.?.left, key);
         } else if (key > node.?.key) {
             node.?.right = try self.removeNode(node.?.right, key);
         } else {
-            // Node to be deleted found
+            
+            if (print_steps)
+                std.debug.print("Removing node with key: {d}\n", .{node.?.key});
+
+
             if (node.?.left == null and node.?.right == null) {
                 // Case: Node with no children
                 self.allocator.destroy(node.?);
@@ -184,8 +219,9 @@ pub const AVLTree = struct {
                 const temp = node.?.left;
                 self.allocator.destroy(node.?);
                 return temp;
+
             } else {
-                // Case: Node with two children
+
                 const temp = self.findMin(node.?.right.?);
                 node.?.key = temp.key;
                 node.?.right = try self.removeNode(node.?.right, temp.key);
@@ -198,6 +234,9 @@ pub const AVLTree = struct {
     pub fn searchHelper(node: ?*Node, low: i32, high: i32, nodes: *std.ArrayList(?*Node)) !void {
         if (node == null) return;
 
+        if (print_steps)
+            std.debug.print("Visiting node with key: {d}\n", .{node.?.key});
+
         const current = node.?;
 
         // Traverse left subtree only if current key > low
@@ -207,6 +246,11 @@ pub const AVLTree = struct {
 
         // Add current node if it's within the range
         if (low <= current.key and current.key <= high) {
+
+            if (print_steps) {
+                std.debug.print("Adding node with key: {d}\n", .{current.key});
+            }
+            node.?.highlighted = true; // Mark node as visited
             try nodes.append(node);
         }
 
@@ -227,7 +271,7 @@ pub const AVLTree = struct {
     }
 
 
-    pub fn traverseInOrder(self: *AVLTree, visit: fn (*Node) void) void {
+    pub fn traverse(self: *AVLTree, visit: fn (anytype) void) void {
         inOrderTraversal(self.root, visit);
     }
 

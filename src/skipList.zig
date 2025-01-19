@@ -1,4 +1,5 @@
 const std = @import("std");
+const print_steps = @import("config.zig").print_steps;
 
 pub fn SkipList(comptime maxLevel: usize) type {
     return struct {
@@ -20,8 +21,6 @@ pub fn SkipList(comptime maxLevel: usize) type {
         allocator: *Allocator,
         update: []?*Node,  
         maxLevel: usize = maxLevel,    
-
-
 
         pub fn init(allocator: *Allocator, probability: f64, seed: u64) Self {
             const rng = std.rand.DefaultPrng.init(seed);
@@ -67,7 +66,7 @@ pub fn SkipList(comptime maxLevel: usize) type {
             return lvl;
         }
 
-        pub fn traverse(self: *Self, visit: fn(*Node) void) void {
+        pub fn traverse(self: *Self, visit: fn(anytype) void) void {
             var current = self.header;
             while (current.forward[0]) |c| {
                 visit(c);
@@ -88,6 +87,8 @@ pub fn SkipList(comptime maxLevel: usize) type {
                 forward[i] = null;
             }
 
+
+
             return node_ptr;
         }
 
@@ -101,6 +102,10 @@ pub fn SkipList(comptime maxLevel: usize) type {
             inline for (0..maxLevel + 1) |i| {
                 while (current.forward[maxLevel - i] != null) {
                     if (current.forward[maxLevel - i]) |node| {
+
+                        if (print_steps) {
+                            std.debug.print("Visiting node with key: {d}\n", .{node.key});
+                        }
                         if (node.key > key) {
                             break;
                         }
@@ -113,8 +118,6 @@ pub fn SkipList(comptime maxLevel: usize) type {
             const lvl = self.randomLevel();
             const newNode = try self.createNode(key, lvl);
 
-            std.debug.print("New node with key: {d} and level: {d}\n", .{key, lvl});
-            std.debug.print("Current key: {d}\n", .{current.key});
             if (current.key == key)
                 return; 
 
@@ -133,6 +136,10 @@ pub fn SkipList(comptime maxLevel: usize) type {
                     node.forward[j] = newNode;
                 }
             }
+
+            if (print_steps) {
+                std.debug.print("Inserted key: {d} with level: {d}\n", .{key, lvl});
+            }
         }
 
         pub fn search(self: *Self, key: i32) ?*Node {
@@ -150,9 +157,9 @@ pub fn SkipList(comptime maxLevel: usize) type {
                     }
                 }
             }
+            current.highlighted = true;
 
             if (current.key == key) {
-                current.highlighted = true;
                 return current;
             }
             return null;
@@ -165,26 +172,46 @@ pub fn SkipList(comptime maxLevel: usize) type {
 
             errdefer result.deinit(); // Ensure cleanup on error
 
+            if (print_steps)
+                std.debug.print("Searching for range: {d} - {d}\n", .{start, end});
+
             inline for (0..maxLevel + 1) |i| {
                 if (self.level >= maxLevel - i) {
+                    if (print_steps)
+                        std.debug.print("Searching level: {d}\n", .{maxLevel - i});
                     while (current.forward[maxLevel - i]) |forward| {
                         if (forward.key > start) {
                             break;
                         }
-                        current.highlighted = true;
+                        if (print_steps) {
+                            std.debug.print("Visiting node with key: {d}\n", .{forward.key});
+                        }
                         current = forward;
                     }
                 }
             }
 
+            if (current.key == start) {
+                current.highlighted = true;
+                try result.append(current);
+            }
+
             while (current.forward[0]) |forward| {
+                if (print_steps) {
+                    std.debug.print("Visiting node with key: {d}\n", .{forward.key});
+                }
                 if (forward.key > end) {
                     break;
                 }
+                forward.highlighted = true;
                 try result.append(forward);
                 current = forward;
             }
-
+            if (print_steps) {
+                for (result.items) |node| {
+                    std.debug.print("Found node with key: {d}\n", .{node.key});
+                }
+            }
             return try result.toOwnedSlice(); // Return the slice of nodes
         }
 

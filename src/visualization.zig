@@ -2,10 +2,12 @@ const std = @import("std");
 const AVLTree = @import("./avl.zig").AVLTree;
 const SkipList = @import("./skiplist.zig").SkipList(4);
 
-
 const raylib = @cImport({
     @cInclude("raylib.h");
 });
+
+const Mode = enum { StartScreen, AVLTree, SkipList };
+
 
 pub fn main() !void {
     var allocator = std.heap.page_allocator;
@@ -15,9 +17,8 @@ pub fn main() !void {
     var random = prng.random();
 
     var avl = AVLTree.init(&allocator);
-
-
     var skiplist: SkipList = SkipList.init(&allocator, 0.5, seed);
+
     var valuesInserted: usize = 0;
     const totalValues = numValues;
 
@@ -28,33 +29,24 @@ pub fn main() !void {
     var inputLength: usize = 0;
     raylib.SetTargetFPS(60);
 
-    var mode: enum { StartScreen, AVLTree, SkipList } = .StartScreen;
+    var mode: Mode = .StartScreen;
 
     while (!raylib.WindowShouldClose()) {
         raylib.BeginDrawing();
         defer raylib.EndDrawing();
-
         raylib.ClearBackground(raylib.RAYWHITE);
 
         switch (mode) {
             .StartScreen => {
-                raylib.DrawText("Choose Visualization", 300, 200, 30, raylib.BLACK);
-                raylib.DrawText("Press A for AVL Tree", 300, 250, 20, raylib.GRAY);
-                raylib.DrawText("Press S for SkipList", 300, 280, 20, raylib.GRAY);
-
-                if (raylib.IsKeyPressed(raylib.KEY_A)) {
-                    mode = .AVLTree;
-                } else if (raylib.IsKeyPressed(raylib.KEY_S)) {
-                    mode = .SkipList;
-                }
+                drawStartScreen(&mode);
             },
             .AVLTree => {
-                if (handleAVLTree(&avl, &allocator, &prng, &random, &inputBuffer, &inputLength, &valuesInserted, totalValues)) {
+                if (handleStructure(&avl, drawTreeEntry, &inputBuffer, &inputLength, &valuesInserted, totalValues, &random)) {
                     mode = .StartScreen;
                 }
             },
             .SkipList => {
-                if (handleSkipList(&skiplist, &allocator, &prng, &random, &inputBuffer, &inputLength, &valuesInserted, totalValues)) {
+                if (handleStructure(&skiplist, drawSkipListEntry, &inputBuffer, &inputLength, &valuesInserted, totalValues, &random)) {
                     mode = .StartScreen;
                 }
             },
@@ -62,182 +54,154 @@ pub fn main() !void {
     }
 }
 
-fn handleAVLTree(avl: *AVLTree, _: *std.mem.Allocator, _: *std.rand.DefaultPrng, random: *std.rand.Random, inputBuffer: *[32]u8, inputLength: *usize, valuesInserted: *usize, totalValues: usize) bool {
-   
-    var inputValue : i32 = 0;
+fn drawStartScreen(mode: *Mode) void {
+
+    raylib.DrawText("Choose Visualization", 300, 200, 30, raylib.BLACK);
+    raylib.DrawText("Press A for AVL Tree", 300, 250, 20, raylib.GRAY);
+    raylib.DrawText("Press S for SkipList", 300, 280, 20, raylib.GRAY);
+
+    if (raylib.IsKeyPressed(raylib.KEY_A)) {
+        mode.* = .AVLTree;
+    } else if (raylib.IsKeyPressed(raylib.KEY_S)) {
+        mode.* = .SkipList;
+    }
+}
+
+var inputValue: i32 = 0;
+var rangeOffset: i32 = 0;
+
+
+fn handleStructure(
+    structure: anytype,
+    drawFunction: fn(anytype) void,
+    inputBuffer: *[32]u8,
+    inputLength: *usize,
+    valuesInserted: *usize,
+    totalValues: usize,
+    random: *std.rand.Random,
+) bool {
     if (raylib.IsKeyPressed(raylib.KEY_BACKSPACE)) {
         return true;
     }
 
-    if (raylib.IsKeyPressed(raylib.KEY_TAB)) {
-
-        if (inputLength.* > 0) {
-            inputValue = parseInput(inputBuffer[0..inputLength.*]) catch |err| {
-                std.debug.print("Parse error: {}\n", .{err});
-                // clear buffer
-                inputLength.* = 0;
-                return false;
-            };
-
-            avl.traverseInOrder(resetTreeHighlight);
-            const result = avl.search(inputValue);
-
-            if (result == null) {
-                std.debug.print("Key not found: {}\n", .{inputValue});
-            } else {
-                std.debug.print("Key found: {}\n", .{inputValue});
-            }
-
-            inputLength.* = 0;
+    if (processInput(inputBuffer, inputLength)) {
+        if (handleInputActions(structure)) {
+            clearInputBuffer(inputBuffer, inputLength);
         }
     }
 
-    if (raylib.IsKeyPressed(raylib.KEY_ENTER)) {
-        if (inputLength.* > 0) {
-            inputValue = parseInput(inputBuffer[0..inputLength.*]) catch |err| {
-                std.debug.print("Parse error: {}\n", .{err});
-                inputLength.* = 0;
-
-                return false;
-            };
-            avl.traverseInOrder(resetTreeHighlight);
-            try avl.remove(inputValue);
-            inputLength.* = 0;
-        }
+    if (raylib.IsKeyPressed(raylib.KEY_K) and valuesInserted.* < totalValues) {
+        insertRandomValue(structure, random, valuesInserted);
+        clearInputBuffer(inputBuffer, inputLength);
     }
 
-    if (raylib.IsKeyPressed(raylib.KEY_K)) {
-        if (valuesInserted.* < totalValues) {
-            
-            const value = @rem(random.int(i32), 201) - 100;
-            avl.insert(value) catch |err| {
-                std.debug.print("Insert error: {}\n", .{err});
-                return false;
-            };
-            valuesInserted.* += 1;
-        }
-    } else {
-        handleInput(inputBuffer, inputLength);
-        if (inputLength.* > 0) {
-            inputValue = parseInput(inputBuffer[0..inputLength.*]) catch  {
-                    if (avl.root) |nonNullNode| {
-                        drawTree(nonNullNode, 800, 100, 400);
-                    }
-                    drawInputValue(inputValue);  // Draw the input value on screen
-                    drawControls();
-                    // clear buffer
-                    return false;
-                };
-        }
-    }
 
-    if (avl.root) |nonNullNode| {
-        drawTree(nonNullNode, 800, 100, 400);
-    }
-
-    drawInputValue(inputValue);  // Draw the input value on screen
+    drawFunction(structure);
+    drawInputValue();
     drawControls();
+
     return false;
 }
 
-fn handleSkipList(skiplist: *SkipList, _: *std.mem.Allocator, _: *std.rand.DefaultPrng, random: *std.rand.Random, inputBuffer: *[32]u8, inputLength: *usize, valuesInserted: *usize, totalValues: usize) bool {
-    if (raylib.IsKeyPressed(raylib.KEY_BACKSPACE)) {
+fn processInput(inputBuffer: *[32]u8, inputLength: *usize) bool {
+    handleInput(inputBuffer, inputLength);
+    if (inputLength.* > 0) {
+
+        const result = parseInput(inputBuffer[0..inputLength.*]) catch {
+            std.debug.print("Parse error\n", .{});
+            return false;
+        };
+
+        inputValue = result;
         return true;
     }
-    
-    var inputValue: i32 = 0;
-
-    if (raylib.IsKeyPressed(raylib.KEY_TAB)) {
-        if (inputLength.* > 0) {
-            inputValue = parseInput(inputBuffer[0..inputLength.*]) catch |err| {
-                std.debug.print("Parse error: {}", .{err});
-                inputLength.* = 0;
-                return false;
-            };
-
-            skiplist.traverse(resetListHighlight);
-            const result = skiplist.search(inputValue);
-            if (result == null) {
-                std.debug.print("Key not found: {}", .{inputValue});
-            } else {
-                std.debug.print("Key found: {}", .{inputValue});
-            }
-            inputLength.* = 0;
-        }
-    }
-
-
-    if (raylib.IsKeyPressed(raylib.KEY_ENTER)) {
-        if (inputLength.* > 0) {
-
-            inputValue = parseInput(inputBuffer[0..inputLength.*]) catch |err| {
-                std.debug.print("Parse error: {}\n", .{err});
-                inputLength.* = 0;
-                return false;
-            };
-
-
-            skiplist.traverse(resetListHighlight);
-
-            skiplist.remove(inputValue) catch |err| {
-                std.debug.print("Remove error: {}\n", .{err});
-                return false;
-            };
-
-            std.debug.print("Key removed: {}\n", .{inputValue});
-            inputLength.* = 0;
-    
-        }
-    }
-
-    if (raylib.IsKeyPressed(raylib.KEY_K)) {
-        
-        
-        skiplist.traverse(resetListHighlight);
-
-        if (valuesInserted.* < totalValues) {
-            const value = @rem(random.int(i32), 201) - 100;
-            std.debug.print("Inserting value: {}\n", .{value});
-
-            skiplist.insert(value) catch |err| {
-                std.debug.print("Insert error: {}\n", .{err});
-                return false;
-            };
-            valuesInserted.* += 1;
-        }
-    } else {
-        handleInput(inputBuffer, inputLength);
-                if (inputLength.* > 0) {
-                inputValue = parseInput(inputBuffer[0..inputLength.*]) catch  {
-                        drawSkipList(skiplist);
-                        drawInputValue(inputValue);  // Draw the input value on screen
-                        drawControls();
-                        // clear buffer
-                        return false;
-                };
-        }
-    }
-
-    
-
-    drawSkipList(skiplist);
-    drawInputValue(inputValue);  // Draw the input value on screen
-    drawControls();
     return false;
 }
 
-fn drawInputValue(inputValue: i32) void {
+
+fn handleInputActions(structure: anytype) bool {
+    structure.traverse(resetHighlight);
+
+    if (raylib.IsKeyPressed(raylib.KEY_TAB)) {
+        const result = structure.search(inputValue);
+        if (result == null) {
+            std.debug.print("Key not found: {}\n", .{inputValue});
+        } else {
+            std.debug.print("Key found: {}\n", .{inputValue});
+        }
+    } else if (raylib.IsKeyPressed(raylib.KEY_ENTER)) {
+        structure.remove(inputValue) catch |err| {
+            std.debug.print("Failed to remove key: {}\n", .{err});
+        };
+        std.debug.print("Key removed: {}\n", .{inputValue});
+    } else if (raylib.IsKeyPressed(raylib.KEY_LEFT_SHIFT)) {
+        structure.insert(inputValue) catch |err| {
+            std.debug.print("Failed to insert key: {}\n", .{err});
+        };
+        std.debug.print("Key inserted: {}\n", .{inputValue});
+        
+    } else if (raylib.IsKeyPressed(raylib.KEY_RIGHT_SHIFT)) {
+        rangeOffset = inputValue;
+
+    } else if (raylib.IsKeyPressed(raylib.KEY_SPACE)) {
+        _ = structure.rangeSearch(inputValue, inputValue + rangeOffset) catch |err| {
+            std.debug.print("Failed to range search: {}\n", .{err});
+        };
+    }
+    else {
+        return false;
+    }
+    return true;
+}
+
+fn insertRandomValue(structure: anytype, random: *std.rand.Random, valuesInserted: *usize) void {
+    const value = @rem(random.int(i32), 201) - 100;
+    std.debug.print("Inserting value: {}\n", .{value});
+    structure.insert(value) catch |err| {
+            std.debug.print("Failed to insert key: {}\n", .{err});
+        };
+    valuesInserted.* += 1;
+}
+
+fn resetHighlight(node: anytype) void {
+    node.highlighted = false;
+}
+
+
+fn drawInputValue() void {
     var buffer: [32]u8 = undefined;
     const inputSlice = std.fmt.bufPrint(buffer[0..], "Input Value: {}", .{inputValue}) catch unreachable;
     buffer[inputSlice.len] = 0;
 
     raylib.DrawText(
         @ptrCast(&buffer[0]),
-        10,   // X-position
-        130,  // Y-position
-        20,   // Font size
+        1300,   
+        130,  
+        20,   
         raylib.DARKGRAY
     );
+
+    var offsetBuffer: [32]u8 = undefined;
+    const offsetSlice = std.fmt.bufPrint(offsetBuffer[0..], "Range Offset: {}", .{rangeOffset}) catch unreachable;
+    offsetBuffer[offsetSlice.len] = 0;
+
+    raylib.DrawText(
+        @ptrCast(&offsetBuffer[0]),
+        1300,   
+        160,  
+        20,   
+        raylib.DARKGRAY
+    );
+}
+
+fn drawTreeEntry(node: anytype) void {
+    if (node.root) |root| {
+        drawTree(@as(*AVLTree.Node, root), 800, 100, 400);
+    }
+}
+
+fn drawSkipListEntry(node: anytype) void {
+    drawSkipList(@as(*SkipList, node));
 }
 
 fn drawTree(node: *AVLTree.Node, x: f32, y: f32, offset: f32) void {
@@ -266,17 +230,15 @@ fn drawSkipList(skiplist: *SkipList) void {
 
     const allocator = std.heap.page_allocator;
     const prevlist =  allocator.alloc(?i32, skiplist.maxLevel + 1) catch {
-        return; // or continue without drawing
+        return; 
     };
 
     const postlist =  allocator.alloc(?i32, skiplist.maxLevel + 1) catch {
-        return; // or continue without drawing
+        return;
     };
 
     defer allocator.free(postlist);
     defer allocator.free(prevlist);
-
-    // set list values to null
 
     for (0..skiplist.maxLevel + 1) |i| {
         prevlist[i] = null;
@@ -294,6 +256,7 @@ fn drawSkipList(skiplist: *SkipList) void {
         }
 
         for (1..counter + 1) |k| {
+            
             const fcounter: f32 = @floatFromInt(k);
             var minX: f32 = 0;
             var maxX: f32 = 0;
@@ -312,10 +275,9 @@ fn drawSkipList(skiplist: *SkipList) void {
                     const endPos = raylib.Vector2{ .x = maxX, .y = 425 - 25 * fcounter };
 
                     raylib.DrawLineV(startPos, endPos, raylib.BLACK);
-
                 }
-                
             }
+
             else {
                 minX = x ;
                 maxX = x ;
@@ -346,27 +308,23 @@ fn drawSkipList(skiplist: *SkipList) void {
 
 
 fn drawSkipListNode(node: *SkipList.Node, x: f32, y: f32, level: usize) void {
-    const squareSize: i32 = 20;  // Size of each small square
-    const spacing: i32 = 5;      // Space between squares
 
+    const squareSize: i32 = 20; 
+    const spacing: i32 = 5;      
     const color = if (node.highlighted) raylib.ORANGE else raylib.SKYBLUE;
 
     const intx: i32 = @intFromFloat(x);
     const inty: i32 = @intFromFloat(y);
 
-    // Calculate total height of stacked squares
     const intLevel: i32 = @intCast(level);
     const totalHeight: i32 = intLevel * (squareSize + spacing);
 
-    // Start drawing from the top to stack down
     var i: i32 = 0;
     while (i < level) : (i += 1) {
         const offsetY: i32 = inty - i * (squareSize + spacing);
         raylib.DrawRectangle(intx - (squareSize / 2), offsetY, squareSize, squareSize, color);
     }
     
-
-    // Draw the node's key centered on the top square
     drawNodeText(
         node.key,
         @floatFromInt(intx - @divFloor(squareSize, 4)),
@@ -379,11 +337,9 @@ fn drawSkipListNode(node: *SkipList.Node, x: f32, y: f32, level: usize) void {
 fn drawConnection(_: *AVLTree.Node, child: *AVLTree.Node, startX: f32, startY: f32, endX: f32, endY: f32) void {
     const startPos = raylib.Vector2{ .x = startX, .y = startY };
     const endPos = raylib.Vector2{ .x = endX, .y = endY };
-
     const color = if (child.highlighted) raylib.RED else raylib.BLACK;
     raylib.DrawLineV(startPos, endPos, color);
 }
-
 
 
 fn drawAVLNode(node: *AVLTree.Node, x: f32, y: f32) void {
@@ -418,28 +374,41 @@ fn drawNodeText(key: i32, x: f32, _: f32) void {
 }
 
 fn drawControls() void {
+
     raylib.DrawText("Press BACKSPACE to return to start screen", 10, 10, 20, raylib.GRAY);
     raylib.DrawText("Press K to insert a random value", 10, 40, 20, raylib.GRAY);
+    raylib.DrawText("Press LEFT_SHIFT to insert a value", 10, 130, 20, raylib.GRAY);
     raylib.DrawText("Press ENTER to delete a value", 10, 70, 20, raylib.GRAY);
     raylib.DrawText("Press TAB to search for a value", 10, 100, 20, raylib.GRAY);
+    raylib.DrawText("Press SPACE to range search", 10, 190, 20, raylib.GRAY);
+    raylib.DrawText("Press RIGHT_SHIFT to set range offset", 10, 160, 20, raylib.GRAY);
+    
 }
 
 fn handleInput(inputBuffer: *[32]u8, inputLength: *usize) void {
     const key = raylib.GetCharPressed();
     if (key != 0 and inputLength.* < inputBuffer.len) {
-        inputBuffer[inputLength.*] = @intCast(key);
-        inputLength.* += 1;
+        if (key == raylib.KEY_MINUS) {
+            std.debug.print("Minus key pressed\n", .{});
+            inputBuffer[inputLength.*] = '-';
+            inputLength.* += 1;
+        }
+
+        if (key >= raylib.KEY_ZERO and key <= raylib.KEY_NINE) {
+            inputBuffer[inputLength.*] = @intCast(key);
+            inputLength.* += 1;
+
+        }
     }
 }
 
 fn parseInput(input: []const u8) !i32 {
     return std.fmt.parseInt(i32, input, 10);
 }
-
-fn resetTreeHighlight(node: *AVLTree.Node) void {
-    node.highlighted = false;
-}
-
-fn resetListHighlight(node: *SkipList.Node) void {
-    node.highlighted = false;
+fn clearInputBuffer(inputBuffer: *[32]u8, inputLength: *usize) void {
+    for (inputBuffer) |*c| {
+        c.* = 0;
+    }
+    inputLength.* = 0;
+    inputValue = 0;
 }

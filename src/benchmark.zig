@@ -1,5 +1,7 @@
 const std = @import("std");
 const time = std.time;
+const config = @import("config.zig");
+
 
 const AVLTree = @import("./avl.zig").AVLTree;
 const SkipList = @import("./skiplist.zig").SkipList;
@@ -96,12 +98,12 @@ pub fn main() !void {
         return;
     }
 
-    const skiplevel: usize = 17;
+    const skiplevel: usize = config.skipListLevel;
 
     var avl_allocator = std.heap.page_allocator;
     var skip_allocator = std.heap.page_allocator;
 
-    const seed: u64 = @intCast(0);
+    const seed: u64 = config.seed;
 
     var avl = AVLTree.init(&avl_allocator);
     var skiplist = SkipList(skiplevel).init(&skip_allocator, 0.5, seed);

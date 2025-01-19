@@ -3,10 +3,9 @@ import random
 import time
 
 def main():
-    # Seed the random number generator
+
     random.seed(time.time())
 
-    # Define directories
     output_dir = "output"
     output_alt_dir = "output_alt"
 
