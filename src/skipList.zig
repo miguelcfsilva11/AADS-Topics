@@ -215,6 +215,30 @@ pub fn SkipList(comptime maxLevel: usize) type {
             return try result.toOwnedSlice(); // Return the slice of nodes
         }
 
+        pub fn totalSize(self: *Self) usize {
+            var total_size: usize = 0;
+
+            // Add size of the update array
+            total_size += @sizeOf(?*Node) * (maxLevel + 1);
+
+            // Add size of the header and tail nodes
+            total_size += @sizeOf(Node);
+            total_size += @sizeOf(Node);
+
+            // Add size of the forward arrays for header and tail nodes
+            total_size += (@sizeOf(?*Node) * (maxLevel + 1)) * 2;
+
+            // Traverse the skip list and calculate size for all nodes
+            var current = self.header.forward[0];
+            while (current) |node| {
+                total_size += @sizeOf(Node);
+                total_size += @sizeOf(?*Node) * (maxLevel + 1);
+                current = node.forward[0];
+            }
+
+            return total_size;
+        }
+
         pub fn remove(self: *Self, key: i32) !void {
 
 

@@ -231,6 +231,27 @@ pub const AVLTree = struct {
         return balance(node.?);
     }
 
+    pub fn totalSize(self: *AVLTree) usize {
+        var total_size: usize = 0;
+
+        const calculateSize = struct {
+            fn impl(node: ?*Node) usize {
+                if (node == null) return 0;
+
+                const actual_node = node.?;
+                var size:  usize = @sizeOf(Node);
+                size += impl(actual_node.left);
+                size += impl(actual_node.right);
+
+                return size;
+            }
+        }.impl;
+
+        total_size += calculateSize(self.root);
+        return total_size;
+    }
+
+
     pub fn searchHelper(node: ?*Node, low: i32, high: i32, nodes: *std.ArrayList(?*Node)) !void {
         if (node == null) return;
 

@@ -6,7 +6,7 @@ const config = @import("config.zig");
 const AVLTree = @import("./avl.zig").AVLTree;
 const SkipList = @import("./skiplist.zig").SkipList;
 
-fn benchmarkOperation(structure: anytype, _: bool, other_values: ?[]i32, values: []i32, operation: fn (anytype, i32, i32) void, label: []const u8) void {
+fn benchmarkOperation(structure: anytype, other_values: ?[]i32, values: []i32, operation: fn (anytype, i32, i32) void, label: []const u8) void {
     const start_time = time.nanoTimestamp();
 
     for (values, 0..) |value, index| {
@@ -17,9 +17,13 @@ fn benchmarkOperation(structure: anytype, _: bool, other_values: ?[]i32, values:
         }
     }
 
+    const memory_used = structure.totalSize();
     const end_time = time.nanoTimestamp();
     const duration = end_time - start_time;
     std.debug.print("{s} took {?} ns\n", .{label, duration});
+    if (operation == insertOp) {
+        std.debug.print("{s} used {?} bytes\n", .{label, memory_used});
+    }
 }
 
 fn insertOp(structure: anytype, value: i32, _: i32) void {
@@ -109,14 +113,14 @@ pub fn main() !void {
     var skiplist = SkipList(skiplevel).init(&skip_allocator, 0.5, seed);
 
 
-    benchmarkOperation(&skiplist, false, other_values, values, insertOp, "Skip List Insertions");
-    benchmarkOperation(&skiplist, false, other_values, values, searchOp, "Skip List Searches");
-    benchmarkOperation(&skiplist, false, other_values, values, deleteOp, "Skip List Deletions");
-    benchmarkOperation(&skiplist, false, other_values, values, rangeSearchOp, "Skip List Range Searches");
+    benchmarkOperation(&skiplist, other_values, values, insertOp, "Skip List Insertions");
+    benchmarkOperation(&skiplist, other_values, values, searchOp, "Skip List Searches");
+    benchmarkOperation(&skiplist, other_values, values, deleteOp, "Skip List Deletions");
+    benchmarkOperation(&skiplist, other_values, values, rangeSearchOp, "Skip List Range Searches");
 
-    benchmarkOperation(&avl, true, other_values, values, insertOp, "AVL Insertions");
-    benchmarkOperation(&avl, true, other_values, values, searchOp, "AVL Searches");
-    benchmarkOperation(&avl, true, other_values, values, deleteOp, "AVL Deletions");
-    benchmarkOperation(&avl, true, other_values, values, rangeSearchOp, "AVL Range Searches");
+    benchmarkOperation(&avl, other_values, values, insertOp, "AVL Insertions");
+    benchmarkOperation(&avl, other_values, values, searchOp, "AVL Searches");
+    benchmarkOperation(&avl, other_values, values, deleteOp, "AVL Deletions");
+    benchmarkOperation(&avl, other_values, values, rangeSearchOp, "AVL Range Searches");
 
 }
