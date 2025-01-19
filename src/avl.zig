@@ -42,7 +42,7 @@ pub const AVLTree = struct {
 
         const actual_node = node.?;
         const left_height: i32 = @intCast(nodeHeight(actual_node.left));
-        const right_height: i32 = @intCast(nodeHeight(actual_node.right)); // Cast to i32
+        const right_height: i32 = @intCast(nodeHeight(actual_node.right));
 
         return left_height - right_height;
     }
@@ -203,30 +203,31 @@ pub const AVLTree = struct {
             
             if (print_steps)
                 std.debug.print("Removing node with key: {d}\n", .{node.?.key});
-
-
             if (node.?.left == null and node.?.right == null) {
                 // Case: Node with no children
-                self.allocator.destroy(node.?);
+                defer self.allocator.destroy(node.?);
                 return null;
             } else if (node.?.left == null) {
                 // Case: Node with only right child
                 const temp = node.?.right;
-                self.allocator.destroy(node.?);
+                defer self.allocator.destroy(node.?);
                 return temp;
             } else if (node.?.right == null) {
                 // Case: Node with only left child
                 const temp = node.?.left;
-                self.allocator.destroy(node.?);
+                defer self.allocator.destroy(node.?);
                 return temp;
 
             } else {
 
+
                 const temp = self.findMin(node.?.right.?);
                 node.?.key = temp.key;
                 node.?.right = try self.removeNode(node.?.right, temp.key);
+
             }
         }
+
 
         return balance(node.?);
     }

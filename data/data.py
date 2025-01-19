@@ -14,7 +14,7 @@ def main():
     os.makedirs(output_alt_dir, exist_ok=True)
 
     # Define dataset sizes and file count
-    dataset_sizes = [10, 100, 1000, 10000, 100000]
+    dataset_sizes = [10, 50, 100, 500, 1000, 2000, 3000, 5000, 8000, 10000, 20000, 50000]
 
     for values_per_file in dataset_sizes:
         all_values = []
