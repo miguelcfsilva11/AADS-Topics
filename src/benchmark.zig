@@ -102,8 +102,11 @@ pub fn main() !void {
 
     const skiplevel: usize = config.skipListLevel;
 
-    var avl_allocator = std.heap.page_allocator;
-    var skip_allocator = std.heap.page_allocator;
+    var arena_allocator = std.heap.ArenaAllocator.init(std.heap.page_allocator);
+    var avl_allocator = arena_allocator.allocator();
+
+    var double_allocator = std.heap.ArenaAllocator.init(std.heap.page_allocator);
+    var skip_allocator = double_allocator.allocator();
 
     const seed: u64 = config.seed;
 
